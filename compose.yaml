@@ -1,0 +1,27 @@
+services:
+  despensa:
+    build: .
+    image: despensa:local
+    container_name: despensa
+    restart: unless-stopped
+    ports:
+      - "8108:8108"
+    environment:
+      TZ: Europe/Lisbon
+      DESPENSA_REGISTRATION: "true"
+    volumes:
+      - despensa-data:/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+volumes:
+  despensa-data:
