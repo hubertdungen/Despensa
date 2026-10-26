@@ -7,3 +7,5 @@ data/
 node_modules/
 test-results/
 artifacts/
+compose.override.yaml
+secrets/

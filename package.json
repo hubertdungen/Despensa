@@ -1,11 +1,11 @@
 {
   "name": "despensa",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Browser regression tests for Despensa",
   "scripts": {
     "test:e2e": "playwright test",
-    "check": "node --check static/app.js"
+    "check": "node --check static/app.js && node --check static/features.js"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0"

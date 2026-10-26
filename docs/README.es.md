@@ -1,8 +1,8 @@
 # Despensa · compras con sentido
 
-[Português](../README.md) · [Fuentes y metodología](SOURCES.md)
+[Português](../README.md) · [Fuentes y metodología](SOURCES.md) · [Authelia y Rumo](../integrations/README.md)
 
-Despensa es una aplicación personal que puede alojar en un ordenador o NAS para organizar la lista mensual, consultar precios observados y preparar un plan de compra. Interfaz en portugués europeo y español, diseño para móvil y escritorio, logo propio e instalación como PWA.
+Despensa organiza la compra mensual y **busca precios automáticamente** en supermercados de Portugal y España. Se aloja en un ordenador o NAS, tiene interfaz en portugués europeo y español, diseño para móvil/escritorio, logo propio e instalación como PWA.
 
 ## Instalación
 
@@ -12,37 +12,37 @@ cd Despensa
 docker compose up -d --build
 ```
 
-Abra `http://IP-DEL-SERVIDOR:8108` y cree su cuenta. Los datos quedan en un volumen Docker. Para instalar en el teléfono y usar la lista sin conexión, necesita **HTTPS válido**. En Android/PC, use la opción de instalación del navegador. En iPhone: **Compartir → Añadir a pantalla de inicio**.
+Abra `http://IP-DEL-SERVIDOR:8108` y cree una cuenta local, o configure entrada directa con Authelia. Los datos quedan en un volumen Docker. Para instalar en el teléfono y usar la lista sin conexión, necesita **HTTPS válido**. En Android/PC, use la instalación del navegador; en iPhone, **Compartir → Añadir a pantalla de inicio**. Los instaladores `.exe` y `.apk` todavía están pendientes.
 
-## Funciones actuales
+## Funciones actuales (0.2)
 
-- Listas mensuales privadas por cuenta, cantidades, categorías, notas y fechas; repetir el mes anterior.
-- Modo de compra con controles grandes y cambios offline que se sincronizan al recuperar conexión y con una sesión válida.
-- Recogida diaria en el servidor, intervalo configurable entre 6 y 168 horas y actualización manual, con al menos 15 minutos entre recogidas.
-- Precios con fuente, fecha e historial; registro manual de precios físicos de Portugal y España.
-- Tiendas, tarjetas, suscripciones, acceso profesional y códigos de cupones en el perfil.
-- Comparación de cestas en hasta tres tiendas, comprando envases enteros. Identifica cestas incompletas y saldo futuro, sin descontarlo del importe a pagar hoy.
-- Estimación de desvíos por carretera desde casa o de regreso del trabajo según la fecha, con coordenadas elegidas por el usuario. Sin coordenadas, puede indicar kilómetros adicionales estimados.
-- Exportación de datos en JSON. Todavía no hay importación/restauración desde la interfaz.
+- Listas mensuales privadas, cantidades, notas, fechas y repetición del mes anterior. Modo de compra y cambios offline que se sincronizan con una sesión válida.
+- Investigación automática al añadir o buscar productos. Vocabulario ibérico para palabras como leche/leite y aceite/azeite; sugerencias de familias con alternativas de varias tiendas.
+- Varios métodos de lectura: catálogos, JSON-LD, datos de producto embebidos, microdatos y descubrimiento en mapas oficiales del sitio. La cola persiste, reparte consultas entre productos y continúa donde se quedó.
+- Reintentos progresivos cuando una fuente falla, conservando observaciones anteriores. El radar muestra el estado de cada cadena, métodos utilizados, páginas descubiertas y siguiente intento.
+- Fotografías de productos, comparación inmediata por litro/kg/unidad, mejor precio observado, fuente, fecha e historial.
+- Tarjetas, acceso profesional y programas reales en el perfil. EntregaZero es una suscripción de entregas: no presupone descuentos en productos. Tener tarjeta tampoco implica tener un cupón personalizado.
+- Detección de tiendas cerca de **casa y trabajo**, por separado. Los kilómetros, desvíos y orden de hasta tres paradas se calculan automáticamente; contempla trabajo→tiendas→casa según la fecha y los días de trabajo.
+- Presupuesto mensual desde Rumo, si se configura la integración de lectura. Sigue el mes seleccionado, con una exportación limitada a supermercado y cuentas explícitamente autorizadas.
+- Gastos y ahorro mensual a partir de compras registradas y una referencia guardada en la fecha de compra. Los costes adicionales de desplazamiento y los datos que faltan se muestran por separado.
+- Exportación de datos en JSON; todavía no hay importación/restauración desde la interfaz.
 
-## Cobertura y límites
+## Cobertura y límites reales
 
-La recogida automática inicial cubre algunas categorías de **Continente y Auchan en Portugal**, hasta 36 referencias de la primera página de cada categoría. **España admite precios manuales, pero todavía no tiene un conector automático activo.** No se utiliza la API de Mercadona ni la búsqueda restringida de Continente. No se eluden bloqueos ni autenticaciones.
+El motor tiene fuentes de investigación para Continente, Auchan, Pingo Doce, Lidl PT/ES, Aldi PT/ES, Intermarché, Mercadona PT/ES, Makro PT/ES, Recheio, Carrefour, DIA, Eroski y Alcampo. **No se exige registrar precios manualmente para utilizar España u otras cadenas.** El registro manual sigue disponible como opción para una observación física.
 
-Los precios online pueden diferir de los de tiendas físicas. Las observaciones de más de 72 horas quedan fuera de los planes. Para fechas futuras, solo entran ofertas con vigencia explícita. Las ofertas de condiciones ambiguas no se utilizan en la optimización. Los cupones requieren su código concreto: tener tarjeta no confirma que tenga un cupón personalizado.
+Una fuente configurada no garantiza un catálogo completo. En la validación 0.2 se extrajeron precios reales de Continente, Auchan, Pingo Doce, Lidl Portugal, Aldi Portugal/España, DIA y Lidl España. Algunas otras fuentes devolvieron restricciones de acceso, páginas sin precios o solo mapas del catálogo. El radar conserva ese estado y programa nuevos intentos; no se inventan resultados. No se eluden autenticaciones ni CAPTCHAs.
 
-Las alternativas genéricas se buscan por palabras; **no se garantiza equivalencia de marcas, calidad o nutrición**. Añadir un producto del catálogo fija esa referencia concreta. Las ofertas de compra mínima o combinaciones complejas no se interpretan automáticamente: registre solo condiciones que pueda cumplir. Los precios sin IVA no entran en los planes.
+Los precios online pueden variar por región o tienda física. Las observaciones de más de 72 h quedan fuera del plan; para fechas futuras se exige vigencia explícita. Se compran envases enteros. Las familias no garantizan equivalencia de marcas, nutrición o calidad; leche desnatada, semidesnatada, sin lactosa, fresca y ecológica se separan cuando hay información suficiente. Las condiciones desconocidas se excluyen y el saldo futuro no reduce lo pagado hoy.
 
-Con distancias desconocidas, el total incluye solo productos. Los kilómetros manuales se suman como estimaciones. Las rutas por carretera usan OSRM, hasta tres paradas, sin tráfico en tiempo real ni tiempo de estancia. No hay instaladores `.exe` o `.apk` publicados: la versión instalable actual es la PWA.
+Para medir ahorro, confirme el precio pagado y elija una tienda habitual o referencia confirmada. Las compras sin referencia cuentan para gastos pero no para ahorro. Las compras offline/pasadas no reciben retroactivamente precios automáticos actuales. Los costes de viaje solo se descuentan cuando se registran; las estimaciones y los totales parciales se identifican.
 
-## Privacidad
+Si falla el servicio de rutas, la distancia queda por confirmar y el total es solo de productos. La búsqueda cercana usa localizadores oficiales de Continente/Auchan y Overpass para ampliar cobertura; las limitaciones se muestran. No hay tráfico en tiempo real.
 
-Los datos personales quedan en la instalación. Los precios públicos automáticos se comparten entre sus cuentas para reducir peticiones. Use una zona o lugar público cercano, sin datos personales. Al pulsar **Localizar**, el texto se envía a Nominatim, sujeto a su [política de uso](https://operations.osmfoundation.org/policies/nominatim/) (consultas manuales, sin autocompletar, con caché y máximo una por segundo); al abrir el plan con coordenadas guardadas, estas se envían a OSRM. Ambos utilizan datos [© OpenStreetMap contributors](https://www.openstreetmap.org/copyright). No se solicitan contraseñas de supermercados, ubicación GPS ni números de tarjetas de cliente.
+## Privacidad y desarrollo
 
-No cierre sesión con cambios pendientes de sincronizar: cerrar sesión elimina la copia local del dispositivo. Si la sesión caduca, vuelva a entrar en la misma cuenta. Para desactivar nuevos registros después de crear las cuentas necesarias, establezca `DESPENSA_REGISTRATION: "false"` en Compose y aplique `docker compose up -d`.
+Listas, perfiles, compras y precios manuales pertenecen a cada cuenta. El catálogo público se comparte entre las cuentas de la instalación. Las fotos se sirven por un proxy limitado a dominios identificados; no se comparten cookies con supermercados. Los textos/coordenadas necesarios se envían a Nominatim, Overpass y OSRM para localizar zonas, tiendas y rutas. Puede configurar servicios propios. Datos geográficos [© OpenStreetMap contributors](https://www.openstreetmap.org/copyright).
 
-## Desarrollo y licencia
+No cierre sesión con cambios pendientes: cerrar sesión elimina la copia local del dispositivo. Para desactivar nuevos registros, establezca `DESPENSA_REGISTRATION: "false"`. El modo Authelia exige un secreto entre proxy y aplicación y permite gestionar passkeys de Bitwarden y llaves FIDO2 en el portal de identidad.
 
-Python 3.12+, Flask/Waitress, SQLite, HTML/CSS/JavaScript sin compilación. Consulte el [README principal](../README.md) para pruebas, backups, configuración y hoja de ruta. Los conectores, reglas de comparación y contribuciones se documentan por separado.
-
-Licencia **AGPL-3.0-or-later**, gratuita para uso personal y también utilizable comercialmente conforme a sus condiciones. El código no concede derechos sobre datos, marcas o contenidos de terceros.
+Python 3.12+, Flask/Waitress, SQLite y HTML/CSS/JavaScript sin compilación. Consulte el [README principal](../README.md) para pruebas, backups y hoja de ruta. Licencia **AGPL-3.0-or-later**, gratuita para uso personal y utilizable comercialmente según sus condiciones. El código no concede derechos sobre los datos, fotografías o marcas de las tiendas.

@@ -2,13 +2,13 @@
 import itertools
 import math
 from datetime import datetime, timezone
-from catalog import fold
+from catalog import fold, product_text, STORE_MAP
 
 
 def eligible(offer, prefs, day, now=None):
     now = now or datetime.now(timezone.utc)
     setting = prefs.get('stores', {}).get(offer['store'], {})
-    if not setting.get('enabled') or offer['country'] not in prefs.get('countries', ['PT']):
+    if not setting.get('enabled') or offer['country'] not in prefs.get('countries', ['PT']) or offer.get('available') is False:
         return False
     # Don't claim unannounced future prices or use stale observations.
     observed = datetime.fromisoformat(offer['observed_at'])
@@ -25,11 +25,13 @@ def eligible(offer, prefs, day, now=None):
     condition = offer['condition']
     if condition == 'unknown':
         return False
-    if condition == 'card' and not setting.get('card'):
+    store = STORE_MAP.get(offer['store'], {})
+    if condition == 'card' and (not store.get('loyalty') or not setting.get('card')):
         return False
-    if condition == 'subscription' and not setting.get('subscription'):
+    subscription = store.get('subscription')
+    if condition == 'subscription' and (not subscription or subscription['kind'] != 'product' or not setting.get('subscription')):
         return False
-    if condition == 'professional' and not setting.get('access'):
+    if condition == 'professional' and (not store.get('professional') or not setting.get('access')):
         return False
     if condition == 'coupon' and offer.get('coupon') not in setting.get('coupons', []):
         return False
@@ -43,13 +45,16 @@ def match(item, offer):
         return False
     if item.get('offer_id'):
         return item['offer_id'] == offer['id']
-    tokens = fold(item['query']).split()
-    words = set(fold(offer['name']).split())
+    if item.get('family'):
+        from products import family
+        return family(offer)['key'] == item['family']
+    tokens = product_text(item['query']).split()
+    words = set(product_text(offer['name']).split())
     # Conservative family exclusions: generic eggs are not quail/chocolate eggs,
     # and a rice drink or rice flour is not a pack of rice. Explicit queries opt in.
     families = {
         'ovos': {'codorniz', 'chocolate', 'claras', 'gemas', 'liquidos', 'pasteurizados'},
-        'arroz': {'bebida', 'farinha', 'tortitas', 'bolachas', 'vinagre', 'papa', 'barras'},
+        'arroz': {'bebida', 'farinha', 'tortitas', 'bolachas', 'vinagre', 'papa', 'barras', 'leite', 'sobremesa'},
         'leite': {'condensado', 'po', 'infantil', 'lactentes', 'crescimento', 'chocolate', 'creme'},
         'azeite': {'oleo', 'spray', 'aromatizado'},
         'massa': {'tomate', 'pimentao', 'folhada', 'quebrada', 'pizza'},
@@ -58,14 +63,6 @@ def match(item, offer):
         if family in tokens and (words & exclusions) - set(tokens):
             return False
     return bool(tokens) and all(t in words for t in tokens)
-
-
-def route_extra(stores, prefs):
-    """Sum user-entered additional route distances. Explicitly an estimate, not road routing."""
-    distances = [prefs.get('stores', {}).get(store, {}).get('extra_km') for store in stores]
-    if any(d is None for d in distances):
-        return None
-    return round(sum(distances), 2)
 
 
 def make_plan(items, offers, prefs, day, now=None, road=None):
@@ -94,13 +91,13 @@ def make_plan(items, offers, prefs, day, now=None, road=None):
                 continue
             from routing import distance_for
             route = distance_for(used, road)
-            km = route['km'] if route else route_extra(used, prefs)
+            km = route['km'] if route else None
             travel = round(km * float(prefs.get('cost_per_km', .2)) * 100) if km is not None else None
             basket = sum(c['cost_cents'] for c in found)
             plans.append(dict(stores=used, selections=found, coverage=len(found), total_items=len(pending),
                 complete=len(found) == len(pending), basket_cents=basket, travel_cents=travel,
                 total_cents=basket + travel if travel is not None else basket,
-                extra_km=km, route=route, distance_method='road' if route else 'user_estimate', balance_cents=sum(c['balance_cents'] for c in found)))
+                extra_km=km, route=route, distance_method='road' if route else 'unavailable', balance_cents=sum(c['balance_cents'] for c in found)))
     # Never rank a partially priced basket ahead of a fully covered one.
     plans.sort(key=lambda p: (-p['coverage'], p['total_cents'], len(p['stores'])))
     return dict(plans=plans[:12], missing=missing, pending=len(pending), day=day,

@@ -29,6 +29,9 @@ const paths = {
   trash: "M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7",
   download: "M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5",
   logout: "M9 3H4v18h5M9 12h12m-5-5 5 5-5 5",
+  eye: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12ZM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6",
+  eyeOff:
+    "m3 3 18 18M10 5c7-1 12 7 12 7a20 20 0 0 1-4 4M6 6a20 20 0 0 0-4 6s4 7 10 7c2 0 3-1 4-1M10 10a3 3 0 0 0 4 4",
   calendar: "M3 5h18v16H3zM7 2v6M17 2v6M3 10h18",
   bottle: "M10 2h4v5l3 4v11H7V11l3-4zM7 14h10",
   grain:
@@ -111,7 +114,7 @@ const copy = {
     catalogSubtitle:
       "Compare o que foi observado. Confira sempre a loja e as condições.",
     coverage:
-      "A recolha automática cobre algumas categorias do Continente e Auchan em Portugal. Espanha e outras lojas aceitam preços manuais. Não é um catálogo completo.",
+      "O radar investiga automaticamente produtos nas lojas de Portugal e Espanha, cruza vários métodos de recolha e volta a tentar quando uma fonte falha. Consulte o estado de cada loja.",
     noResults: "Ainda não encontrámos esse produto",
     noResultsText:
       "Experimente outras palavras, atualize o catálogo ou registe um preço que viu na loja.",
@@ -147,7 +150,7 @@ const copy = {
     futureNotice:
       "Para datas futuras, só usamos preços com uma validade publicada que inclua esse dia.",
     distanceNotice:
-      "Sem coordenadas, os quilómetros são estimativas que introduz no perfil. A soma de desvios não representa uma rota otimizada.",
+      "Defina as zonas de casa e trabalho no perfil para calcular automaticamente os percursos rodoviários.",
     profileTitle: "À sua medida.",
     profileSubtitle:
       "As suas lojas, os seus cartões e a forma como faz compras.",
@@ -168,6 +171,14 @@ const copy = {
     enabled: "Usar esta loja",
     hasCard: "Tenho cartão",
     hasSubscription: "Tenho subscrição",
+    deliveryPass: "Tenho EntregaZero (entregas)",
+    deliveryOnly:
+      "Serviço de entregas; não altera automaticamente o preço dos produtos.",
+    budgetAuto: "Usar orçamento mensal do Rumo",
+    budgetFromRumo: "Rumo · Supermercado",
+    budgetMissing: "Sem orçamento para este mês no Rumo",
+    budgetUnavailable: "Ligação ao Rumo por atualizar",
+    manualBudget: "Orçamento manual (€ / mês)",
     hasAccess: "Tenho acesso profissional",
     extraKm: "Quilómetros adicionais estimados",
     storeAddress: "Loja / localização",
@@ -193,6 +204,11 @@ const copy = {
     loginHint: "Entre para abrir as suas listas e preferências.",
     username: "Nome de utilizador",
     password: "Palavra-passe",
+    showPassword: "Mostrar palavra-passe",
+    hidePassword: "Ocultar palavra-passe",
+    ssoLogin: "Entrar com Authelia",
+    ssoHint:
+      "Use a sua sessão Authelia. Não precisa de criar outra conta na Despensa.",
     login: "Entrar",
     register: "Criar conta",
     registerTitle: "Uma despensa só sua.",
@@ -312,7 +328,7 @@ const copy = {
     catalogSubtitle:
       "Compare lo observado. Compruebe la tienda y las condiciones.",
     coverage:
-      "La recogida automática cubre algunas categorías de Continente y Auchan en Portugal. España y otras tiendas admiten precios manuales. No es un catálogo completo.",
+      "El radar investiga automáticamente productos en tiendas de Portugal y España, combina varios métodos de recogida y reintenta cuando una fuente falla. Consulte el estado de cada tienda.",
     noResults: "Todavía no encontramos ese producto",
     noResultsText:
       "Pruebe otras palabras, actualice el catálogo o registre un precio de la tienda.",
@@ -348,7 +364,7 @@ const copy = {
     futureNotice:
       "Para fechas futuras solo usamos precios con una vigencia publicada que incluya ese día.",
     distanceNotice:
-      "Sin coordenadas, los kilómetros son estimaciones introducidas en el perfil. La suma de desvíos no representa una ruta optimizada.",
+      "Defina las zonas de casa y trabajo en el perfil para calcular automáticamente las rutas por carretera.",
     profileTitle: "A su medida.",
     profileSubtitle: "Sus tiendas, sus tarjetas y su forma de comprar.",
     preferences: "Preferencias",
@@ -368,6 +384,14 @@ const copy = {
     enabled: "Usar esta tienda",
     hasCard: "Tengo tarjeta",
     hasSubscription: "Tengo suscripción",
+    deliveryPass: "Tengo EntregaZero (entregas)",
+    deliveryOnly:
+      "Servicio de entregas; no cambia automáticamente el precio de los productos.",
+    budgetAuto: "Usar presupuesto mensual de Rumo",
+    budgetFromRumo: "Rumo · Supermercado",
+    budgetMissing: "Sin presupuesto para este mes en Rumo",
+    budgetUnavailable: "Conexión con Rumo pendiente de actualizar",
+    manualBudget: "Presupuesto manual (€ / mes)",
     hasAccess: "Tengo acceso profesional",
     extraKm: "Kilómetros adicionales estimados",
     storeAddress: "Tienda / ubicación",
@@ -393,6 +417,11 @@ const copy = {
     loginHint: "Entre para abrir sus listas y preferencias.",
     username: "Nombre de usuario",
     password: "Contraseña",
+    showPassword: "Mostrar contraseña",
+    hidePassword: "Ocultar contraseña",
+    ssoLogin: "Entrar con Authelia",
+    ssoHint:
+      "Use su sesión Authelia. No necesita crear otra cuenta en Despensa.",
     login: "Entrar",
     register: "Crear cuenta",
     registerTitle: "Una despensa solo suya.",
@@ -460,7 +489,12 @@ const state = {
   view: "list",
   month: thisMonth(),
   user: null,
+  auth: { mode: "local" },
   profile: null,
+  budget: null,
+  comparisons: [],
+  nearby: null,
+  savings: null,
   stores: [],
   items: [],
   offers: [],
@@ -497,7 +531,12 @@ function saveSnapshot() {
       uidKey(),
       JSON.stringify({
         user: state.user,
+        auth: state.auth,
         profile: state.profile,
+        budget: state.budget,
+        comparisons: state.comparisons,
+        savings: state.savings,
+        plan: state.plan,
         stores: state.stores,
         items: state.items,
         offers: state.offers,
@@ -536,6 +575,7 @@ async function api(path, method = "GET", data) {
   if (!response.ok) {
     const err = new Error(result.error || t("error"));
     err.status = response.status;
+    err.auth = result.auth;
     throw err;
   }
   return result;
@@ -594,12 +634,27 @@ function render() {
     ["queued", "running"].includes(j.status),
   );
   $("#app").innerHTML =
-    `<div class="shell"><aside class="sidebar"><a class="brand" href="/"><img src="/logo.svg" alt=""><div><strong>despensa<span>.</span></strong><span>${t("tagline")}</span></div></a>${nav()}<div class="side-note">${icon("leaf", "sprout")}<strong>${t("greeting")}</strong><p>${t("intro")}</p></div><div class="side-foot"><span class="dot"></span> Portugal & España <span>·</span> v0.1</div></aside><div class="workspace"><header class="topbar"><div class="breadcrumb">Despensa ${icon("chevron")}<b>${t(state.view)}</b></div><a class="mobile-brand" href="/"><img src="/logo.svg" alt="">despensa.</a><div class="top-actions"><span class="top-date">${new Date().toLocaleDateString(locale, { day: "numeric", month: "long" })}</span><button class="quiet small" data-action="refresh" title="${t("refresh")}" aria-label="${t("refresh")}" ${active ? "disabled" : ""}>${icon("refresh", active ? "spinner" : "")}<span class="refresh-label">${t(active ? "updating" : "refresh")}</span></button><button class="avatar" data-view="profile" title="${esc(state.user.username)}" aria-label="${t("profile")}">${esc(state.user.username.slice(0, 2).toUpperCase())}</button></div></header>${state.offline || readQueue().length ? `<div class="offline-banner" role="status">${state.offline ? t("offline") : `${readQueue().length} ${t("pending")}`}</div>` : ""}<main class="content" id="main">${{ list: renderList, explore: renderExplore, plan: renderPlan, profile: renderProfile }[state.view]()}</main></div></div>${nav(true)}`;
+    `<div class="shell"><aside class="sidebar"><a class="brand" href="/"><img src="/logo.svg" alt=""><div><strong>despensa<span>.</span></strong><span>${t("tagline")}</span></div></a>${nav()}<div class="side-note">${icon("leaf", "sprout")}<strong>${t("greeting")}</strong><p>${t("intro")}</p></div><div class="side-foot"><span class="dot"></span> Portugal & España <span>·</span> v0.2</div></aside><div class="workspace"><header class="topbar"><div class="breadcrumb">Despensa ${icon("chevron")}<b>${t(state.view)}</b></div><a class="mobile-brand" href="/"><img src="/logo.svg" alt="">despensa.</a><div class="top-actions"><span class="top-date">${new Date().toLocaleDateString(locale, { day: "numeric", month: "long" })}</span><button class="quiet small" data-action="refresh" title="${t("refresh")}" aria-label="${t("refresh")}" ${active ? "disabled" : ""}>${icon("refresh", active ? "spinner" : "")}<span class="refresh-label">${t(active ? "updating" : "refresh")}</span></button><button class="avatar" data-view="profile" title="${esc(state.user.username)}" aria-label="${t("profile")}">${esc(state.user.username.slice(0, 2).toUpperCase())}</button></div></header>${state.offline || readQueue().length ? `<div class="offline-banner" role="status">${state.offline ? t("offline") : `${readQueue().length} ${t("pending")}`}</div>` : ""}<main class="content" id="main">${{ list: renderList, explore: renderExplore, plan: renderPlan, profile: renderProfile }[state.view]()}</main></div></div>${nav(true)}`;
   bind();
 }
 function renderAuth() {
+  if (state.auth?.mode === "proxy") {
+    $("#app").innerHTML =
+      `<main class="auth-page" id="main"><section class="auth-story"><a class="brand" href="/"><img src="/logo.svg" alt=""><div><strong>despensa.</strong><span>${t("tagline")}</span></div></a><h1>${t("authStory").replace("\n", "<br>")}</h1><p>${t("authText")}</p>${heroArt()}</section><section class="auth-form"><div class="auth-box"><h2>${t("loginTitle")}</h2><p>${t("ssoHint")}</p>${state.auth.login_url ? `<a class="button-link primary" href="${esc(state.auth.login_url)}">${icon("shield")}${t("ssoLogin")}</a>` : ""}</div></section></main>`;
+    return;
+  }
   $("#app").innerHTML =
-    `<main class="auth-page" id="main"><section class="auth-story"><a class="brand" href="/"><img src="/logo.svg" alt=""><div><strong>despensa.</strong><span>${t("tagline")}</span></div></a><div class="eyebrow">PORTUGAL & ESPAÑA</div><h1>${t("authStory").replace("\n", "<br>")}</h1><p>${t("authText")}</p>${heroArt()}</section><section class="auth-form"><div class="auth-box"><div class="auth-locale"><select id="auth-locale" aria-label="${t("locale")}"><option value="pt-PT" ${locale === "pt-PT" ? "selected" : ""}>Português</option><option value="es-ES" ${locale === "es-ES" ? "selected" : ""}>Español</option></select></div><h2>${t(state.registering ? "registerTitle" : "loginTitle")}</h2><p>${t(state.registering ? "registerHint" : "loginHint")}</p><form id="auth-form"><div class="field"><label for="username">${t("username")}</label><input id="username" name="username" autocomplete="username" required minlength="3" maxlength="80"></div><div class="field"><label for="password">${t("password")}</label><input id="password" type="password" name="password" autocomplete="${state.registering ? "new-password" : "current-password"}" required minlength="10" maxlength="256" placeholder="${t("passwordHint")}"></div><div class="auth-error" role="alert" id="auth-error"></div><button class="primary" type="submit">${t(state.registering ? "register" : "login")} ${icon("arrow")}</button></form><div class="auth-toggle">${t(state.registering ? "hasAccount" : "noAccount")} <button class="quiet" id="auth-toggle">${t(state.registering ? "login" : "register")}</button></div><div class="privacy-note">${icon("shield")}<span>${t("privacy")}</span></div></div></section></main>`;
+    `<main class="auth-page" id="main"><section class="auth-story"><a class="brand" href="/"><img src="/logo.svg" alt=""><div><strong>despensa.</strong><span>${t("tagline")}</span></div></a><div class="eyebrow">PORTUGAL & ESPAÑA</div><h1>${t("authStory").replace("\n", "<br>")}</h1><p>${t("authText")}</p>${heroArt()}</section><section class="auth-form"><div class="auth-box"><div class="auth-locale"><select id="auth-locale" aria-label="${t("locale")}"><option value="pt-PT" ${locale === "pt-PT" ? "selected" : ""}>Português</option><option value="es-ES" ${locale === "es-ES" ? "selected" : ""}>Español</option></select></div><h2>${t(state.registering ? "registerTitle" : "loginTitle")}</h2><p>${t(state.registering ? "registerHint" : "loginHint")}</p><form id="auth-form"><div class="field"><label for="username">${t("username")}</label><input id="username" name="username" autocomplete="username" required minlength="3" maxlength="80"></div><div class="field"><label for="password">${t("password")}</label><div class="password-input"><input id="password" type="password" name="password" autocomplete="${state.registering ? "new-password" : "current-password"}" required minlength="10" maxlength="256" placeholder="${t("passwordHint")}"><button type="button" id="toggle-password" class="quiet" aria-controls="password" aria-pressed="false" aria-label="${t("showPassword")}">${icon("eye")}</button></div></div><div class="auth-error" role="alert" id="auth-error"></div><button class="primary" type="submit">${t(state.registering ? "register" : "login")} ${icon("arrow")}</button></form><div class="auth-toggle">${t(state.registering ? "hasAccount" : "noAccount")} <button class="quiet" id="auth-toggle">${t(state.registering ? "login" : "register")}</button></div><div class="privacy-note">${icon("shield")}<span>${t("privacy")}</span></div></div></section></main>`;
+  $("#toggle-password").onclick = () => {
+    const visible = $("#password").type === "password";
+    $("#password").type = visible ? "text" : "password";
+    $("#toggle-password").setAttribute("aria-pressed", String(visible));
+    $("#toggle-password").setAttribute(
+      "aria-label",
+      t(visible ? "hidePassword" : "showPassword"),
+    );
+    $("#toggle-password").innerHTML = icon(visible ? "eyeOff" : "eye");
+  };
   $("#auth-toggle").onclick = () => {
     state.registering = !state.registering;
     renderAuth();
@@ -634,12 +689,26 @@ function bestForItem(item) {
   const p = state.plan?.plans?.[0];
   return p?.selections?.find((s) => s.item_id === item.id);
 }
+function budgetSource() {
+  const b = state.budget;
+  if (!b || b.source !== "rumo") return t("budgetDetail");
+  if (b.status === "month_missing") return t("budgetMissing");
+  if (b.status !== "ok") return t("budgetUnavailable");
+  return b.url
+    ? `<a href="${esc(b.url)}" target="_blank" rel="noopener">${t("budgetFromRumo")} ↗</a>`
+    : t("budgetFromRumo");
+}
+async function loadBudget() {
+  const month = state.month;
+  const r = await api("/budget?month=" + month);
+  if (state.month === month) state.budget = r.budget;
+}
 function renderList() {
   const checked = state.items.filter((i) => i.checked).length;
   const groups = [
     ...new Set(state.items.map((i) => i.category || "Mercearia")),
   ];
-  return `${title("monthList", "subtitle", monthPicker())}${state.shopping ? `<button class="quiet small" data-action="shopping">${icon("close")}${t("exitShopping")}</button>` : ""}<section class="hero"><div class="hero-text"><div class="eyebrow">${t("heroLabel")}</div><h2>${t("heroTitle").replace("\n", "<br>")}</h2><p>${t("heroText")}</p></div>${heroArt()}</section><div class="stats"><div class="stat"><div class="stat-icon">${icon("bag")}</div><div><div class="label">${t("items")}</div><div class="number">${state.items.length}</div><div class="detail">${checked} ${t("done")}</div></div></div><div class="stat"><div class="stat-icon">${icon("wallet")}</div><div><div class="label">${t("budget")}</div><div class="number">${money(state.profile.budget * 100)}</div><div class="detail">${t("budgetDetail")}</div></div></div><div class="stat"><div class="stat-icon">${icon("search")}</div><div><div class="label">${t("prices")}</div><div class="number">${state.status.offer_count || 0}</div><div class="detail">${t("pricesDetail")}</div></div></div></div><div class="dashboard-grid"><section class="panel"><div class="panel-head"><div><h2>${t("yourList")}</h2><p>${t("listHint")}</p></div><button class="primary small" data-action="add">${icon("plus")}${t("add")}</button></div>${
+  return `${title("monthList", "subtitle", monthPicker())}${state.shopping ? `<button class="quiet small" data-action="shopping">${icon("close")}${t("exitShopping")}</button>` : ""}<section class="hero"><div class="hero-text"><div class="eyebrow">${t("heroLabel")}</div><h2>${t("heroTitle").replace("\n", "<br>")}</h2><p>${t("heroText")}</p></div>${heroArt()}</section><div class="stats"><div class="stat"><div class="stat-icon">${icon("bag")}</div><div><div class="label">${t("items")}</div><div class="number">${state.items.length}</div><div class="detail">${checked} ${t("done")}</div></div></div><div class="stat"><div class="stat-icon">${icon("wallet")}</div><div><div class="label">${t("budget")}</div><div class="number">${state.budget?.amount_cents == null ? "—" : money(state.budget.amount_cents)}</div><div class="detail" id="budget-source">${budgetSource()}</div></div></div><div class="stat"><div class="stat-icon">${icon("search")}</div><div><div class="label">${t("prices")}</div><div class="number">${state.status.offer_count || 0}</div><div class="detail">${t("pricesDetail")}</div></div></div>${renderSavingsStat()}</div><div class="dashboard-grid"><section class="panel"><div class="panel-head"><div><h2>${t("yourList")}</h2><p>${t("listHint")}</p></div><button class="primary small" data-action="add">${icon("plus")}${t("add")}</button></div>${
     state.items.length
       ? groups
           .map(
@@ -647,8 +716,16 @@ function renderList() {
               `<div class="section-title">${esc(categoryName(group))}</div>${state.items
                 .filter((i) => (i.category || "Mercearia") === group)
                 .map((item) => {
-                  const choice = bestForItem(item);
-                  return `<div class="item ${item.checked ? "checked" : ""}"><button class="check ${item.checked ? "done" : ""}" data-check="${item.id}" aria-label="${esc(item.name)}" aria-pressed="${!!item.checked}">${item.checked ? icon("check") : ""}</button>${visual(item.name)}<div class="item-info"><div class="item-name">${esc(item.name)}</div><div class="item-meta"><span>${item.quantity} ${esc(item.unit)}</span>${item.needed_on ? `<span>${dateText(item.needed_on)}</span>` : ""}${item.offer_id ? `<span>${icon("pin")}</span>` : ""}</div></div><div class="item-price">${choice ? money(choice.cost_cents) : "—"}<small>${choice ? esc(storeName(choice.offer.store)) : t("noPrice")}</small></div><button class="quiet more" data-edit="${item.id}" aria-label="${t("edit")}: ${esc(item.name)}">${icon("more")}</button></div>`;
+                  const receipt = state.savings?.purchases?.find(
+                    (p) => p.item_id === item.id,
+                  );
+                  const choice = receipt
+                    ? {
+                        cost_cents: receipt.paid_cents,
+                        offer: { store: receipt.store, name: item.name },
+                      }
+                    : bestForItem(item);
+                  return `<div class="item ${item.checked ? "checked" : ""}"><button class="check ${item.checked ? "done" : ""}" data-check="${item.id}" aria-label="${esc(item.name)}" aria-pressed="${!!item.checked}">${item.checked ? icon("check") : ""}</button>${offerVisual(choice?.offer, item.name)}<div class="item-info"><div class="item-name">${esc(item.name)}</div><div class="item-meta"><span>${item.quantity} ${esc(item.unit)}</span>${item.needed_on ? `<span>${dateText(item.needed_on)}</span>` : ""}${item.offer_id ? `<span>${icon("pin")}</span>` : ""}</div></div><div class="item-price">${choice ? money(choice.cost_cents) : "—"}<small>${choice ? `${receipt ? ft("paidShort") + " · " : ""}${esc(storeName(choice.offer.store))}` : t("noPrice")}</small></div><button class="quiet more" data-edit="${item.id}" aria-label="${t("edit")}: ${esc(item.name)}">${icon("more")}</button></div>`;
                 })
                 .join("")}`,
           )
@@ -658,7 +735,7 @@ function renderList() {
           "emptyText",
           `<button class="quiet small" data-view="explore">${t("browse")}${icon("arrow")}</button>`,
         )
-  }<form class="add-row" id="quick-add"><input name="name" required maxlength="160" placeholder="${t("quickAdd")}" aria-label="${t("product")}"><button class="primary" type="submit" aria-label="${t("add")}">${icon("plus")}</button></form><div class="list-foot"><span>${checked} / ${state.items.length} ${t("done")}</span><button class="quiet small" data-action="shopping">${icon("bag")}${t(state.shopping ? "exitShopping" : "shopping")}</button></div></section><aside class="right-stack"><section class="insight">${icon("spark")}<h3>${t("smartTitle")}</h3><p>${t("smartText")}</p><button data-view="plan">${t("seePlan")}${icon("arrow")}</button></section><section class="panel"><div class="panel-head"><div><h3>${t("sources")}</h3><p>${t("sourceHint")}</p></div></div><div class="panel-body">${["continente", "auchan"].map((s) => `<div class="source-row"><div class="store-mark">${esc(storeName(s).slice(0, 2).toUpperCase())}</div><div><div class="store-name">${esc(storeName(s))}</div><small>${t("sourcePartial")} · PT</small></div><span class="status">${dateText(state.status.meta?.last_refresh)}</span></div>`).join("")}<div class="source-row"><div class="store-mark">${icon("plus")}</div><div><div class="store-name">${t("manualPrice")}</div><small>Portugal · España</small></div><button class="quiet small" data-action="manual" aria-label="${t("manualPrice")}">${icon("arrow")}</button></div></div></section><div class="privacy-note">${icon("shield")}<span>${t("privacy")}</span></div></aside></div><div class="toolbar mt16"><button class="quiet small" data-action="copy">${icon("calendar")}${t("copyMonth")}</button><button class="quiet small" data-action="install">${icon("download")}${t("install")}</button></div>`;
+  }<form class="add-row" id="quick-add"><input name="name" required maxlength="160" placeholder="${t("quickAdd")}" aria-label="${t("product")}"><button class="primary" type="submit" aria-label="${t("add")}">${icon("plus")}</button></form><div class="list-foot"><span>${checked} / ${state.items.length} ${t("done")}</span><button class="quiet small" data-action="shopping">${icon("bag")}${t(state.shopping ? "exitShopping" : "shopping")}</button></div></section><aside class="right-stack"><section class="insight">${icon("spark")}<h3>${t("smartTitle")}</h3><p>${t("smartText")}</p><button data-view="plan">${t("seePlan")}${icon("arrow")}</button></section><section class="panel"><div class="panel-head"><div><h3>${t("sources")}</h3><p>${t("sourceHint")}</p></div></div><div class="panel-body">${renderRadar()}<div class="source-row"><div class="store-mark">${icon("plus")}</div><div><div class="store-name">${t("manualPrice")}</div><small>Portugal · España</small></div><button class="quiet small" data-action="manual" aria-label="${t("manualPrice")}">${icon("arrow")}</button></div></div></section><div class="privacy-note">${icon("shield")}<span>${t("privacy")}</span></div></aside></div><div class="toolbar mt16"><button class="quiet small" data-action="copy">${icon("calendar")}${t("copyMonth")}</button><button class="quiet small" data-action="install">${icon("download")}${t("install")}</button></div>`;
 }
 function categoryName(c) {
   return (
@@ -680,19 +757,10 @@ function renderExplore() {
     )
     .join(
       "",
-    )}</select><button class="primary" data-action="manual">${icon("plus")}${t("manualPrice")}</button></div><div class="notice">${icon("shield")}<span>${t("coverage")}</span></div><div id="catalog-results">${renderProducts()}</div>`;
+    )}</select><button class="primary" data-action="manual">${icon("plus")}${t("manualPrice")}</button></div><div class="notice">${icon("shield")}<span>${t("coverage")}</span></div><details class="research-details"><summary>${t("sources")}</summary>${renderRadar(true)}</details><div id="catalog-results">${renderProducts()}</div>`;
 }
 function renderProducts() {
-  const products = state.offers.filter(
-    (o) => !state.storeFilter || o.store === state.storeFilter,
-  );
-  return products.length
-    ? `<div class="product-grid">${products.map((o) => `<article class="product-card"><div class="product-top"><span class="tag gray">${esc(storeName(o.store))} · ${o.country}</span><span class="tag ${o.condition === "public" ? "" : "amber"}">${conditionLabel(o.condition)}</span></div>${visual(o.name)}<div class="card-name"><h3>${esc(o.name)}</h3><span class="unit-price">${esc(o.size ? `${o.size} ${o.unit}` : t("packUnknown"))}</span></div><div><span class="price">${money(o.price_cents)}</span><div class="unit-price">${o.size ? `${money(o.price_cents / o.size)} / ${o.unit}` : esc(o.pack)}</div></div>${o.balance_cents ? `<span class="condition-note">+ ${money(o.balance_cents)} ${t("futureBalance")}</span>` : ""}<div class="evidence">${t("observed")} ${dateText(o.observed_at)} · ${o.source_kind === "manual" ? t("manual") : "online"}<br>${esc(o.location)}</div><div class="card-actions"><button class="quiet small" data-history="${esc(o.id)}">${t("history")}</button><button class="primary small" data-offer="${esc(o.id)}" aria-label="${t("useProduct")}: ${esc(o.name)}">${icon("plus")}${t("add")}</button></div>${o.source_url ? `<a href="${esc(o.source_url)}" target="_blank" rel="noopener noreferrer" class="evidence">${t("source")} ↗</a>` : ""}</article>`).join("")}</div>`
-    : empty(
-        "noResults",
-        "noResultsText",
-        `<button class="primary small" data-action="manual">${t("manualPrice")}</button>`,
-      );
+  return renderComparisonProducts();
 }
 function renderPlan() {
   const result = state.plan;
@@ -702,7 +770,7 @@ function renderPlan() {
           .slice(0, 6)
           .map(
             (p, index) =>
-              `<article class="plan-card ${index === 0 ? "best" : ""}"><header><div>${index === 0 ? `<span class="tag">${t("best")}</span>` : ""}${!p.complete ? `<span class="tag amber">${t("partial")}</span>` : ""}<h3>${p.stores.map((s) => esc(storeName(s))).join(" + ")}</h3><span class="muted">${p.coverage} / ${p.total_items} ${t("coverageLabel")}</span></div><div class="plan-total">${money(p.total_cents)}<div class="muted total-note">${t(p.travel_cents === null ? "subtotal" : "total")}</div></div></header><div class="plan-metrics"><span>${t("basket")}: <b>${money(p.basket_cents)}</b></span><span>${icon("route")} ${p.extra_km === null ? t("unknownKm") : `${p.extra_km} km · ${money(p.travel_cents)} · ${t(p.distance_method === "road" ? "routeReal" : "distanceEstimate")}`}</span>${p.balance_cents ? `<span>${t("futureBalance")}: ${money(p.balance_cents)}</span>` : ""}</div><div class="plan-products">${p.selections.map((s) => `<div class="plan-product"><div>${esc(s.item_name)}<small>${esc(s.offer.name)} · ${s.packs} × ${esc(s.offer.pack)} · ${esc(storeName(s.offer.store))}</small></div><b>${money(s.cost_cents)}</b></div>`).join("")}</div></article>`,
+              `<article class="plan-card ${index === 0 ? "best" : ""}"><header><div>${index === 0 ? `<span class="tag">${t("best")}</span>` : ""}${!p.complete ? `<span class="tag amber">${t("partial")}</span>` : ""}<h3>${p.stores.map((s) => esc(storeName(s))).join(" + ")}</h3><span class="muted">${p.coverage} / ${p.total_items} ${t("coverageLabel")}</span></div><div class="plan-total">${money(p.total_cents)}<div class="muted total-note">${t(p.travel_cents === null ? "subtotal" : "total")}</div></div></header><div class="plan-metrics"><span>${t("basket")}: <b>${money(p.basket_cents)}</b></span><span>${icon("route")} ${p.extra_km === null ? t("unknownKm") : `${p.extra_km} km · ${money(p.travel_cents)} · ${t(p.distance_method === "road" ? "routeReal" : "distanceEstimate")}`}</span>${p.balance_cents ? `<span>${t("futureBalance")}: ${money(p.balance_cents)}</span>` : ""}</div><div class="plan-products">${p.selections.map((s) => `<div class="plan-product"><div>${esc(s.item_name)}<small>${esc(s.offer.name)} · ${s.packs} × ${esc(s.offer.pack)} · ${esc(storeName(s.offer.store))}</small></div><b>${money(s.cost_cents)}</b></div>`).join("")}</div>${routeItinerary(p)}</article>`,
           )
           .join("")
       : empty(
@@ -720,10 +788,10 @@ function checkbox(name, label, checked) {
 }
 function renderProfile() {
   const p = state.profile;
-  return `${title("profileTitle", "profileSubtitle")}<form id="profile-form"><div class="settings-grid"><section class="panel"><div class="panel-body"><h2 class="settings-title">${t("preferences")}</h2><div class="form-grid"><div class="field"><label for="f-locale">${t("locale")}</label><select name="locale" id="f-locale"><option value="pt-PT" ${locale === "pt-PT" ? "selected" : ""}>Português</option><option value="es-ES" ${locale === "es-ES" ? "selected" : ""}>Español</option></select></div>${field("budget", "budgetField", p.budget, "number", 'min="0" max="100000" step="1"')}${field("interval_hours", "interval", p.interval_hours, "number", 'min="6" max="168" step="1"')}${field("max_stops", "stops", p.max_stops, "number", 'min="1" max="3" step="1"')}${field("cost_per_km", "costKm", p.cost_per_km, "number", 'min="0" max="10" step="0.01"')}<div class="field"><label>${t("countries")}</label>${checkbox("country-PT", "Portugal", p.countries.includes("PT"))}${checkbox("country-ES", "España", p.countries.includes("ES"))}</div></div>${checkbox("automatic", "auto", p.automatic)}</div></section><section class="panel"><div class="panel-body"><h2 class="settings-title">${t("routine")}</h2><div class="field"><label for="f-home">${t("home")}</label><div class="toolbar"><input id="f-home" name="home" value="${esc(p.home)}" placeholder="Lisboa, Portugal"><button type="button" class="small" data-locate="home">${icon("pin")}${t("locate")}</button></div><small class="muted" id="coords-home">${p.home_coords ? esc(p.home_coords.join(", ")) : ""}</small></div><div class="field"><label for="f-work">${t("work")}</label><div class="toolbar"><input id="f-work" name="work" value="${esc(p.work)}" placeholder=""><button type="button" class="small" data-locate="work">${icon("pin")}${t("locate")}</button></div><small class="muted" id="coords-work">${p.work_coords ? esc(p.work_coords.join(", ")) : ""}</small></div><p class="privacy-note">${t("geocodeHint")}</p><p class="privacy-note"><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> · <a href="https://operations.osmfoundation.org/policies/nominatim/" target="_blank" rel="noopener">Nominatim</a></p><div class="field"><label>${t("workdays")}</label><div class="toolbar">${Array.from({ length: 7 }, (_, i) => `<label class="checkbox-field"><input type="checkbox" name="workday-${i}" ${p.workdays.includes(i) ? "checked" : ""}>${new Intl.DateTimeFormat(locale, { weekday: "short" }).format(new Date(2026, 0, 5 + i))}</label>`).join("")}</div></div></div></section><section class="wide"><div class="page-title"><div><h2>${t("stores")}</h2><p>${t("storesHint")}</p></div></div><div class="store-settings">${state.stores
+  return `${title("profileTitle", "profileSubtitle")}<form id="profile-form"><div class="settings-grid"><section class="panel"><div class="panel-body"><h2 class="settings-title">${t("preferences")}</h2>${authSettings()}<div class="form-grid"><div class="field"><label for="f-locale">${t("locale")}</label><select name="locale" id="f-locale"><option value="pt-PT" ${locale === "pt-PT" ? "selected" : ""}>Português</option><option value="es-ES" ${locale === "es-ES" ? "selected" : ""}>Español</option></select></div>${field("budget", "manualBudget", p.budget, "number", 'min="0" max="100000" step="1"')}${field("interval_hours", "interval", p.interval_hours, "number", 'min="6" max="168" step="1"')}${field("max_stops", "stops", p.max_stops, "number", 'min="1" max="3" step="1"')}${field("cost_per_km", "costKm", p.cost_per_km, "number", 'min="0" max="10" step="0.01"')}${referenceStoreField()}<div class="field"><label>${t("countries")}</label>${checkbox("country-PT", "Portugal", p.countries.includes("PT"))}${checkbox("country-ES", "España", p.countries.includes("ES"))}</div></div>${state.budget?.rumo_available ? checkbox("budget_source_auto", "budgetAuto", p.budget_source !== "manual") : ""}<p class="muted">${budgetSource()}</p>${checkbox("automatic", "auto", p.automatic)}</div></section><section class="panel"><div class="panel-body"><h2 class="settings-title">${t("routine")}</h2><div class="field"><label for="f-home">${t("home")}</label><div class="toolbar"><input id="f-home" name="home" value="${esc(p.home)}" placeholder="Lisboa, Portugal"><button type="button" class="small" data-locate="home">${icon("pin")}${t("locate")}</button></div><small class="muted" id="coords-home">${p.home_coords ? esc(p.home_coords.join(", ")) : ""}</small></div><div class="field"><label for="f-work">${t("work")}</label><div class="toolbar"><input id="f-work" name="work" value="${esc(p.work)}" placeholder=""><button type="button" class="small" data-locate="work">${icon("pin")}${t("locate")}</button></div><small class="muted" id="coords-work">${p.work_coords ? esc(p.work_coords.join(", ")) : ""}</small></div><p class="privacy-note">${t("geocodeHint")}</p><p class="privacy-note"><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> · <a href="https://operations.osmfoundation.org/policies/nominatim/" target="_blank" rel="noopener">Nominatim</a></p><div class="field"><label>${t("workdays")}</label><div class="toolbar">${Array.from({ length: 7 }, (_, i) => `<label class="checkbox-field"><input type="checkbox" name="workday-${i}" ${p.workdays.includes(i) ? "checked" : ""}>${new Intl.DateTimeFormat(locale, { weekday: "short" }).format(new Date(2026, 0, 5 + i))}</label>`).join("")}</div></div></div></section><section class="wide panel"><div class="panel-body" id="nearby-content">${renderNearby()}</div></section><section class="wide"><div class="page-title"><div><h2>${t("stores")}</h2><p>${t("storesHint")}</p></div></div><div class="store-settings">${state.stores
     .map((s) => {
       const v = p.stores[s.id];
-      return `<section class="store-setting" data-store="${s.id}"><header><div><strong>${esc(s.name)}</strong> <span class="tag gray">${s.country}</span></div><span class="tag ${s.automatic ? "" : "gray"}">${t(s.automatic ? "sourcePartial" : "manual")}</span></header>${checkbox(`${s.id}-enabled`, "enabled", v.enabled)}<div class="checks">${checkbox(`${s.id}-card`, "hasCard", v.card)}${checkbox(`${s.id}-subscription`, "hasSubscription", v.subscription)}${s.professional ? checkbox(`${s.id}-access`, "hasAccess", v.access) : ""}</div><div class="field"><label for="f-${s.id}-address">${t("storeAddress")}</label><div class="toolbar"><input name="${s.id}-address" id="f-${s.id}-address" value="${esc(v.address)}"><button type="button" class="small" data-locate="${s.id}">${icon("pin")}${t("locate")}</button></div><small class="muted" id="coords-${s.id}">${v.coords ? esc(v.coords.join(", ")) : ""}</small></div>${field(`${s.id}-extra_km`, "extraKm", v.extra_km ?? "", "number", 'min="0" max="2000" step="0.1"')}${field(`${s.id}-coupons`, "coupons", v.coupons.join(", "))}</section>`;
+      return `<section class="store-setting" data-store="${s.id}"><header><div><strong>${esc(s.name)}</strong> <span class="tag gray">${s.country}</span></div><span class="tag ${s.automatic ? "" : "gray"}">${researchLabel(s.id)}</span></header>${checkbox(`${s.id}-enabled`, "enabled", v.enabled)}<div class="checks">${s.loyalty ? checkbox(`${s.id}-card`, s.loyalty, v.card) : ""}${s.subscription?.kind === "delivery" ? checkbox(`${s.id}-delivery_subscription`, "deliveryPass", v.delivery_subscription) : ""}${s.professional ? checkbox(`${s.id}-access`, "hasAccess", v.access) : ""}</div>${s.subscription?.kind === "delivery" ? `<p class="privacy-note">${t("deliveryOnly")}</p>` : ""}<div class="field"><label for="f-${s.id}-address">${t("storeAddress")}</label><div class="toolbar"><input name="${s.id}-address" id="f-${s.id}-address" value="${esc(v.address)}"><button type="button" class="small" data-locate="${s.id}">${icon("pin")}${t("locate")}</button></div><small class="muted" id="coords-${s.id}">${v.coords ? esc(v.coords.join(", ")) : ""}</small></div>${field(`${s.id}-coupons`, "coupons", v.coupons.join(", "))}</section>`;
     })
     .join(
       "",
@@ -732,32 +800,42 @@ function renderProfile() {
 function openModal(head, html) {
   $("#modal-content").innerHTML =
     `<div class="modal-header"><h2>${t(head)}</h2><button class="quiet" data-close aria-label="${t("close")}">${icon("close")}</button></div>${html}`;
-  $("#modal").showModal();
+  if (!$("#modal").open) $("#modal").showModal();
   $("#modal [data-close]").onclick = () => $("#modal").close();
   $("#modal")
     .querySelectorAll("[data-cancel]")
     .forEach((b) => (b.onclick = () => $("#modal").close()));
 }
-function itemModal(item = null, offer = null, quickName = "") {
+function itemModal(item = null, offer = null, quickName = "", group = null) {
   const d = item || {
-    name: offer?.name || quickName,
-    query: offer?.name || quickName,
+    name: group?.label || offer?.name || quickName,
+    query: group?.query || offer?.name || quickName,
     quantity: offer?.size || 1,
-    unit: offer?.unit || "un",
+    unit:
+      group?.unit ||
+      offer?.unit ||
+      (/leite|leche|azeite|aceite/i.test(quickName)
+        ? "l"
+        : /arroz|massa|pasta/i.test(quickName)
+          ? "kg"
+          : "un"),
     category: "Mercearia",
     needed_on: "",
     note: "",
-    offer_id: offer?.id || "",
+    offer_id: group ? "" : offer?.id || "",
+    family: group?.key || "",
   };
   openModal(
     item ? "edit" : "add",
-    `<form id="item-form"><div class="form-grid">${field("name", "product", d.name, "text", 'required maxlength="160"')}${field("query", "query", d.query, "text", 'required minlength="2" maxlength="120"', "queryHint")}${field("quantity", "quantity", d.quantity, "number", 'required min="0.001" max="10000" step="0.001"')}<div class="field"><label for="f-unit">${t("unit")}</label><select id="f-unit" name="unit">${["un", "kg", "l"].map((u) => `<option ${d.unit === u ? "selected" : ""}>${u}</option>`).join("")}</select></div><div class="field"><label for="f-category">${t("category")}</label><select id="f-category" name="category">${["Mercearia", "Laticínios", "Frescos", "Casa e limpeza", "Outros"].map((c) => `<option value="${esc(c)}" ${d.category === c ? "selected" : ""}>${esc(categoryName(c))}</option>`).join("")}</select></div>${field("needed_on", "needed", d.needed_on, "date")}<div class="field full"><label for="f-note">${t("note")}</label><textarea id="f-note" name="note" maxlength="300">${esc(d.note)}</textarea></div></div><div class="notice">${icon("search")}<span>${t(d.offer_id ? "lockedItem" : "genericItem")}</span></div><div class="form-actions">${item ? `<button type="button" class="quiet danger" id="delete-item">${icon("trash")}${t("delete")}</button>` : ""}<button type="button" data-cancel>${t("cancel")}</button><button class="primary" type="submit">${t("save")}</button></div></form>`,
+    `<form id="item-form"><div class="form-grid">${field("name", "product", d.name, "text", 'required maxlength="160"')}${field("query", "query", d.query, "text", 'required minlength="2" maxlength="120"', "queryHint")}<div class="field full"><div id="item-suggestions" class="item-suggestions" aria-live="polite"></div></div>${field("quantity", "quantity", d.quantity, "number", 'required min="0.001" max="10000" step="0.001"')}<div class="field"><label for="f-unit">${t("unit")}</label><select id="f-unit" name="unit">${["un", "kg", "l"].map((u) => `<option ${d.unit === u ? "selected" : ""}>${u}</option>`).join("")}</select></div><div class="field"><label for="f-category">${t("category")}</label><select id="f-category" name="category">${["Mercearia", "Laticínios", "Frescos", "Casa e limpeza", "Outros"].map((c) => `<option value="${esc(c)}" ${d.category === c ? "selected" : ""}>${esc(categoryName(c))}</option>`).join("")}</select></div>${field("needed_on", "needed", d.needed_on, "date")}<div class="field full"><label for="f-note">${t("note")}</label><textarea id="f-note" name="note" maxlength="300">${esc(d.note)}</textarea></div></div><div class="notice">${icon("search")}<span>${t(d.offer_id ? "lockedItem" : "genericItem")}</span></div><div class="form-actions">${item ? `<button type="button" class="quiet" id="record-item-purchase">${icon("wallet")}${ft("addPurchase")}</button><button type="button" class="quiet danger" id="delete-item">${icon("trash")}${t("delete")}</button>` : ""}<button type="button" data-cancel>${t("cancel")}</button><button class="primary" type="submit">${t("save")}</button></div></form>`,
   );
+  setupItemSuggestions(d);
   $("#item-form").onsubmit = async (e) => {
     e.preventDefault();
     const v = Object.fromEntries(new FormData(e.target));
     v.quantity = +v.quantity;
     v.offer_id = d.offer_id || "";
+    v.family = d.family || "";
     v.checked = !!d.checked;
     const id = item?.id || newId();
     const payload = { ...v, month: state.month, client_id: id };
@@ -775,6 +853,9 @@ function itemModal(item = null, offer = null, quickName = "") {
     toast(t(item ? "saved" : "added"));
     loadPlan();
   };
+  if (item)
+    $("#record-item-purchase").onclick = () =>
+      purchaseModal(item, bestForItem(item));
   if (item)
     $("#delete-item").onclick = async () => {
       state.items = state.items.filter((i) => i.id !== item.id);
@@ -796,8 +877,9 @@ function manualModal() {
       )
       .join(
         "",
-      )}</select></div>${field("price", "price", "", "number", 'required min="0.01" max="100000" step="0.01"')}${field("size", "size", 1, "number", 'required min="0.001" max="10000" step="0.001"')}<div class="field"><label for="f-unit">${t("unit")}</label><select id="f-unit" name="unit"><option>un</option><option>kg</option><option>l</option></select></div><div class="field"><label for="f-condition">${t("condition")}</label><select id="f-condition" name="condition">${["public", "card", "subscription", "coupon", "professional"].map((c) => `<option value="${c}">${conditionLabel(c)}</option>`).join("")}</select></div>${field("coupon", "couponCode", "")}${field("balance", "balance", 0, "number", 'min="0" max="100000" step="0.01"')}${field("location", "location", "", "text", "required")}${field("valid_from", "from", today(), "date")}${field("valid_to", "until", "", "date")}${field("source_url", "sourceUrl", "", "url")}</div>${checkbox("vat_included", "vat", true)}<div class="notice">${icon("wallet")}<span>${t("manualNote")}</span></div><div class="auth-error" id="manual-error" role="alert"></div><div class="form-actions"><button type="button" data-cancel>${t("cancel")}</button><button class="primary" type="submit">${t("save")}</button></div></form>`,
+      )}</select></div>${field("price", "price", "", "number", 'required min="0.01" max="100000" step="0.01"')}${field("size", "size", 1, "number", 'required min="0.001" max="10000" step="0.001"')}<div class="field"><label for="f-unit">${t("unit")}</label><select id="f-unit" name="unit"><option>un</option><option>kg</option><option>l</option></select></div><div class="field"><label for="f-condition">${t("condition")}</label><select id="f-condition" name="condition">${["public", "card", "coupon", "professional"].map((c) => `<option value="${c}">${conditionLabel(c)}</option>`).join("")}</select></div>${field("coupon", "couponCode", "")}${field("balance", "balance", 0, "number", 'min="0" max="100000" step="0.01"')}${field("location", "location", "", "text", "required")}${field("valid_from", "from", today(), "date")}${field("valid_to", "until", "", "date")}${field("source_url", "sourceUrl", "", "url")}</div>${checkbox("vat_included", "vat", true)}<div class="notice">${icon("wallet")}<span>${t("manualNote")}</span></div><div class="auth-error" id="manual-error" role="alert"></div><div class="form-actions"><button type="button" data-cancel>${t("cancel")}</button><button class="primary" type="submit">${t("save")}</button></div></form>`,
   );
+  setupManualConditions();
   $("#manual-form").onsubmit = async (e) => {
     e.preventDefault();
     const d = Object.fromEntries(new FormData(e.target));
@@ -861,6 +943,7 @@ async function loadOffers() {
       encodeURIComponent(state.storeFilter),
   );
   state.offers = r.offers;
+  state.comparisons = r.comparisons || [];
   saveSnapshot();
 }
 async function loadPlan() {
@@ -886,26 +969,33 @@ async function load() {
   try {
     const me = await api("/me");
     state.user = me.user;
+    state.auth = me.auth || { mode: "local" };
     state.profile = me.profile;
     state.stores = me.stores;
     locale = state.profile.locale;
     localStorage.setItem("despensa-locale", locale);
     localStorage.setItem("despensa-last-user", JSON.stringify(me.user));
     await flushQueue();
-    const [items, status, offers] = await Promise.all([
+    const [items, status, offers, budget, savings] = await Promise.all([
       api("/items?month=" + state.month),
       api("/status"),
       api("/offers?q=" + encodeURIComponent(state.search)),
+      api("/budget?month=" + state.month),
+      api("/savings?month=" + state.month),
     ]);
     state.items = items.items;
     state.status = status;
     state.offers = offers.offers;
+    state.budget = budget.budget;
+    state.savings = savings.savings;
+    state.comparisons = offers.comparisons || [];
     state.offline = false;
     saveSnapshot();
     render();
     loadPlan();
   } catch (err) {
     if (err.status === 401) {
+      if (err.auth) state.auth = err.auth;
       state.user = null;
       render();
       return;
@@ -939,6 +1029,7 @@ function bind() {
           state.shopping = false;
           render();
           if (state.view === "plan") loadPlan();
+          if (state.view === "profile") loadNearby();
           if (state.view === "explore") searchOffers();
           window.scrollTo(0, 0);
         }),
@@ -948,9 +1039,15 @@ function bind() {
     .forEach((b) => (b.onclick = () => action(b.dataset.action)));
   $("#month")?.addEventListener("change", async (e) => {
     state.month = e.target.value;
+    state.budget = null;
+    state.savings = null;
     state.plan = null;
     try {
-      const r = await api("/items?month=" + state.month);
+      const [r] = await Promise.all([
+        api("/items?month=" + state.month),
+        loadBudget(),
+        loadSavings(),
+      ]);
       state.items = r.items;
       saveSnapshot();
       render();
@@ -969,6 +1066,13 @@ function bind() {
       (b) =>
         (b.onclick = async () => {
           const i = state.items.find((i) => i.id === b.dataset.check);
+          if (!i.checked && bestForItem(i))
+            return purchaseModal(i, bestForItem(i));
+          if (
+            i.checked &&
+            state.savings?.purchases?.some((p) => p.item_id === i.id)
+          )
+            return savingsModal();
           i.checked = !i.checked;
           saveSnapshot();
           render();
@@ -986,6 +1090,7 @@ function bind() {
           itemModal(state.items.find((i) => i.id === b.dataset.edit))),
     );
   bindProducts();
+  bindFeatureActions();
   $("#catalog-search")?.addEventListener("input", (e) => {
     state.search = e.target.value;
     clearTimeout(searchOffers.timer);
@@ -1048,6 +1153,7 @@ async function searchOffers() {
     if (seq === searchSeq && $("#catalog-results")) {
       $("#catalog-results").innerHTML = renderProducts();
       bindProducts();
+      bindFeatureActions();
       $("#catalog-results")
         .querySelectorAll("[data-action]")
         .forEach((b) => (b.onclick = () => action(b.dataset.action)));
@@ -1071,17 +1177,26 @@ async function saveProfile(e) {
     "cost_per_km",
   ])
     p[k] = d[k];
+  p.reference_store = d.reference_store || "";
   for (const key of ["home", "work"])
     if (d[key] !== state.profile[key] && located[key] !== d[key])
       p[key + "_coords"] = null;
   p.countries = ["PT", "ES"].filter((c) => f.elements["country-" + c].checked);
   p.automatic = f.automatic.checked;
+  if (f.elements.budget_source_auto)
+    p.budget_source = f.elements.budget_source_auto.checked ? "auto" : "manual";
   p.workdays = Array.from({ length: 7 }, (_, i) => i).filter(
     (i) => f.elements["workday-" + i].checked,
   );
   for (const s of state.stores) {
     const v = p.stores[s.id];
-    for (const k of ["enabled", "card", "subscription", "access"])
+    for (const k of [
+      "enabled",
+      "card",
+      "subscription",
+      "delivery_subscription",
+      "access",
+    ])
       v[k] = !!f.elements[`${s.id}-${k}`]?.checked;
     if (
       v.address !== d[s.id + "-address"] &&
@@ -1089,22 +1204,24 @@ async function saveProfile(e) {
     )
       v.coords = null;
     v.address = d[s.id + "-address"];
-    v.extra_km = d[s.id + "-extra_km"] === "" ? null : +d[s.id + "-extra_km"];
+    v.extra_km = null;
     v.coupons = d[s.id + "-coupons"]
       .split(",")
       .map((x) => x.trim())
       .filter(Boolean);
   }
   try {
+    await resolveRoutine(p);
     const r = await api("/profile", "PUT", p);
     state.profile = r.profile;
     locale = r.profile.locale;
     localStorage.setItem("despensa-locale", locale);
     saveSnapshot();
     toast(t("saved"));
-    await loadOffers();
+    await Promise.all([loadOffers(), loadBudget(), loadSavings()]);
     render();
     loadPlan();
+    loadNearby(true);
   } catch (err) {
     toast(err.message);
   }
@@ -1147,6 +1264,7 @@ window.addEventListener("beforeinstallprompt", (e) => {
 });
 async function action(name) {
   try {
+    if (name === "savings") return savingsModal();
     if (name === "add") return itemModal();
     if (name === "manual") return manualModal();
     if (name === "shopping") {
@@ -1180,7 +1298,7 @@ async function action(name) {
       return load();
     }
     if (name === "logout") {
-      await api("/auth/logout", "POST", {});
+      const result = await api("/auth/logout", "POST", {});
       localStorage.removeItem(uidKey());
       localStorage.removeItem(uidKey() + "-queue");
       localStorage.removeItem("despensa-last-user");
@@ -1188,6 +1306,10 @@ async function action(name) {
       state.items = [];
       state.offers = [];
       state.plan = null;
+      if (result.redirect) {
+        window.location.assign(result.redirect);
+        return;
+      }
       render();
       return;
     }
@@ -1203,8 +1325,25 @@ window.addEventListener("offline", () => {
   state.offline = true;
   render();
 });
-$("#modal").addEventListener("click", (e) => {
-  if (e.target === $("#modal")) $("#modal").close();
+// Native select/number controls can retarget clicks to the dialog. Only a gesture
+// that starts and ends outside its bounds is a backdrop dismissal.
+let backdropStart = false;
+const outsideModal = (e) => {
+  const r = $("#modal").getBoundingClientRect();
+  return (
+    e.clientX < r.left ||
+    e.clientX > r.right ||
+    e.clientY < r.top ||
+    e.clientY > r.bottom
+  );
+};
+$("#modal").addEventListener("pointerdown", (e) => {
+  backdropStart = e.target === $("#modal") && outsideModal(e);
+});
+$("#modal").addEventListener("pointerup", (e) => {
+  if (backdropStart && e.target === $("#modal") && outsideModal(e))
+    $("#modal").close();
+  backdropStart = false;
 });
 if ("serviceWorker" in navigator && window.isSecureContext)
   navigator.serviceWorker.register("/sw.js").catch(() => {});
@@ -1212,10 +1351,23 @@ setInterval(async () => {
   if (!state.user || state.offline || document.hidden) return;
   try {
     const previous = JSON.stringify(state.status.jobs);
+    const oldBudget = JSON.stringify([
+      state.budget?.amount_cents,
+      state.budget?.status,
+      state.budget?.source,
+    ]);
+    await loadBudget();
+    const budgetChanged =
+      oldBudget !==
+      JSON.stringify([
+        state.budget?.amount_cents,
+        state.budget?.status,
+        state.budget?.source,
+      ]);
     const status = await api("/status");
     state.status = status;
     if (
-      previous !== JSON.stringify(status.jobs) &&
+      (previous !== JSON.stringify(status.jobs) || budgetChanged) &&
       state.view !== "profile" &&
       !$("#modal").open
     ) {

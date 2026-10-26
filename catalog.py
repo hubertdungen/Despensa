@@ -25,12 +25,40 @@ STORES = [
     ('alcampo', 'Alcampo', 'ES', '#da493b', False, False),
     ('lidl-es', 'Lidl', 'ES', '#2766a5', False, False),
     ('makro-es', 'Makro', 'ES', '#255698', False, True),
+    ('aldi-es', 'Aldi', 'ES', '#1f568d', False, False),
 ]
 STORE_MAP = {s[0]: dict(id=s[0], name=s[1], country=s[2], color=s[3], automatic=s[4], professional=s[5]) for s in STORES}
+LOYALTY = {
+    'continente': 'Cartão Continente', 'auchan': 'Clube Auchan', 'pingo-doce': 'Poupa Mais',
+    'lidl-pt': 'Lidl Plus', 'lidl-es': 'Lidl Plus', 'intermarche': 'Cartão Poupança',
+    'carrefour': 'El Club Carrefour', 'dia': 'Club DIA', 'eroski': 'EROSKI club', 'alcampo': 'Club Alcampo',
+}
+for sid, store in STORE_MAP.items():
+    store['automatic'] = True
+    store['loyalty'] = LOYALTY.get(sid)
+    store['subscription'] = None
+STORE_MAP['continente']['subscription'] = dict(name='EntregaZero', kind='delivery',
+    source='https://www.continente.pt/servicos/entrega-zero/')
 
 
 def fold(value):
     return re.sub(r'[^a-z0-9]+', ' ', ''.join(c for c in unicodedata.normalize('NFKD', str(value).lower()) if not unicodedata.combining(c))).strip()
+
+
+def product_text(value):
+    """Shared Iberian product vocabulary; unknown words are retained verbatim."""
+    text = ' ' + fold(value) + ' '
+    for es, pt in [('aceite de oliva','azeite'),('aceite oliva','azeite'),
+                   ('sin lactosa','sem lactose'),('semidesnatada','meio gordo'),
+                   ('desnatada','magro'),('entera','gordo'),('virgen extra','virgem extra'),
+                   ('virgen','virgem'),('aire libre','ar livre'),('leche','leite'),
+                   ('huevos','ovos'),('aceite','oleo'),('pollo','frango'),('fresca','fresco'),
+                   ('queso','queijo'),('mantequilla','manteiga'),('azucar','acucar'),
+                   ('atun','atum'),('patatas','batatas'),('patata','batata'),
+                   ('manzanas','macas'),('manzana','maca'),('yogur','iogurte'),
+                   ('yogures','iogurtes'),('harina','farinha'),('espaguetis','esparguete')]:
+        text = text.replace(' ' + es + ' ', ' ' + pt + ' ')
+    return text.strip()
 
 
 def cents(value):
@@ -58,7 +86,7 @@ def pack_size(text):
 def get(url, params=None):
     # One catalogue page per query, no retries on blocks, no login/cookie harvesting.
     response = requests.get(url, params=params, timeout=(8, 22), headers={
-        'User-Agent': 'Despensa/0.1 (+https://github.com/hubertdungen/Despensa; personal grocery planner)',
+        'User-Agent': 'Despensa/0.2 (+https://github.com/hubertdungen/Despensa; personal grocery planner)',
         'Accept-Language': 'pt-PT,es;q=0.8',
     })
     response.raise_for_status()
@@ -86,6 +114,8 @@ def parse_retailer(html, store):
             size_node = tile.select_one('.pwc-tile--quantity')
             pack = size_node.get_text(' ', strip=True) if size_node else name
             amount, unit = pack_size(pack)
+            image_node = tile.select_one('img.ct-tile-image, img.tile-image')
+            image_url = (image_node.get('data-src') or image_node.get('src') or '').strip() if image_node else ''
             text = fold(tile.get_text(' ', strip=True))
             # Conditional promotions are withheld from optimisation until verified.
             conditional = any(word in text for word in ('em cartao', 'com cartao', 'cupao', 'clube auchan'))
@@ -95,7 +125,7 @@ def parse_retailer(html, store):
                 source_url=urljoin('https://www.continente.pt' if store == 'continente' else 'https://www.auchan.pt', link['href']),
                 channel='online', location='Catálogo online · localização por confirmar', valid_from='', valid_to='',
                 source_kind='automatic', conditions_note='Ver condições na fonte' if conditional else 'Preço público observado; confirmar na loja',
-                vat_included=True))
+                vat_included=True, image_url=image_url))
         except (ValueError, KeyError, TypeError):
             continue
     return results
@@ -110,6 +140,7 @@ CATEGORY_SOURCES = [
     dict(store='continente', name='Ovos', url='https://www.continente.pt/supermercado/laticinios-e-ovos/ovos/'),
     dict(store='auchan', name='Arroz', url='https://www.auchan.pt/pt/alimentacao/mercearia/arroz-e-massa/arroz/'),
     dict(store='auchan', name='Azeite', url='https://www.auchan.pt/pt/alimentacao/mercearia/azeite-oleo-e-vinagre/azeite/'),
+    dict(store='auchan', name='Leite', url='https://www.auchan.pt/pt/alimentacao/produtos-lacteos/leites/'),
 ]
 _ROBOTS = {}
 

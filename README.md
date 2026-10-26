@@ -7,24 +7,28 @@
 
 Despensa é uma aplicação de compras pessoais que pode alojar no seu computador ou NAS. Organiza listas mensais, guarda as suas preferências e compara os produtos para os quais existem preços observados. A interface funciona em português europeu e espanhol, no computador e no telemóvel.
 
-**Versão 0.1: funcional, com cobertura de preços deliberadamente parcial.** Não promete o preço mais baixo de todas as lojas. As alternativas são propostas por palavras, não por uma equivalência certificada de produtos.
+**Versão 0.2: radar automático ibérico, com investigação orientada pelos produtos da lista.** A aplicação descobre páginas, combina vários métodos de leitura, guarda o progresso e repete fontes que falham. O radar mostra a cobertura efetivamente conseguida em cada loja; uma fonte sem resposta nunca aparece como um preço encontrado.
 
 ## O que já pode fazer
 
-- Criar contas separadas, com listas e perfis privados.
+- Entrar diretamente com Authelia numa instalação configurada para SSO, ou usar contas locais independentes com controlo para mostrar a palavra-passe.
 - Organizar produtos por mês e categoria, com quantidades, notas e data de compra; repetir o mês anterior.
 - Usar um modo de compras com controlos maiores e lista offline. Alterações feitas offline ficam numa fila local e sincronizam quando regressa a ligação e a sessão continua válida.
-- Pesquisar o catálogo guardado e consultar a fonte, data e histórico de cada observação.
-- Recolher diariamente algumas categorias públicas do Continente e Auchan em Portugal. Intervalo configurável entre 6 e 168 horas; recolha manual com um intervalo mínimo de 15 minutos. O servidor trabalha mesmo com a app fechada.
+- Pesquisar automaticamente a partir de palavras como “leite”, incluindo vocabulário português/espanhol; consultar imagens, comparação imediata por litro/kg/unidade, fonte, data e histórico.
+- Investigar lojas de Portugal e Espanha através de catálogos, JSON-LD, dados de produto embebidos, microdados e mapas oficiais do site. A fila persistente dá prioridade aos produtos pedidos, reparte as consultas pela lista e continua a descobrir o catálogo entre recolhas. O servidor trabalha com a app fechada; a atualização periódica é configurável entre 6 e 168 horas.
 - Registar preços de lojas físicas de Portugal e Espanha, incluindo Makro e Recheio, formato, IVA, localização, validade, cartão, subscrição ou cupão específico.
-- Definir as lojas acessíveis e os cartões, subscrições e códigos de cupão que possui. Ter cartão não equivale a ter um cupão.
+- Definir lojas acessíveis, cartões e códigos de cupão. Subscrições aparecem apenas onde existe um programa identificado: EntregaZero é uma subscrição de entregas, sem assumir descontos nos produtos.
 - Comparar até três lojas por ida, comprando embalagens inteiras. Os cabazes incompletos são identificados e nunca vencem um completo por omitir produtos.
 - Separar o valor pago hoje do saldo futuro em cartão.
-- Localizar casa, trabalho e lojas; estimar o desvio rodoviário com OSRM, incluindo o regresso do trabalho nos dias configurados. Sem coordenadas, pode indicar quilómetros adicionais estimados.
+- Localizar casa e trabalho ao guardar as preferências, descobrir lojas perto de ambos e estimar automaticamente os quilómetros, os desvios e a ordem das paragens. Nos dias de trabalho considera trabalho→lojas→casa; noutros dias, casa→lojas→casa.
+- Acompanhar o orçamento do Rumo para o mês selecionado, atualizado automaticamente através de uma exportação limitada às despesas de supermercado.
+- Registar compras e ver gastos e poupança mensal face à loja habitual ou a uma referência confirmada, com os custos adicionais de deslocação separados.
 - Exportar os seus dados em JSON.
 - Instalar como PWA em navegadores compatíveis, através de HTTPS.
 
 <p align="center"><img src="docs/screenshots/mobile.png" width="330" alt="Lista no telemóvel"></p>
+
+![Comparação automática de preços](docs/screenshots/explore.png)
 
 ## Começar
 
@@ -36,7 +40,7 @@ cd Despensa
 docker compose up -d --build
 ```
 
-Abra `http://IP-DO-SERVIDOR:8108` e crie a sua conta. O volume Docker `despensa-data` guarda a base de dados. A primeira conta ativa a recolha diária por defeito; também pode carregar em **Atualizar preços**. Uma recolha percorre sete páginas com pausas entre pedidos; se uma fonte falhar, preserva as observações anteriores e identifica a falha.
+Abra `http://IP-DO-SERVIDOR:8108` e crie a sua conta. O volume Docker `despensa-data` guarda a base de dados. A primeira conta ativa a recolha diária por defeito; também pode carregar em **Atualizar preços**. Cada passagem tem um orçamento limitado de páginas por loja, com pausas entre pedidos. A fila guarda páginas por visitar e tentativas falhadas; as falhas têm novas tentativas progressivas, de 15 minutos até 24 horas. O radar mostra o estado real de cada loja e preserva observações anteriores. Novos produtos e pesquisas entram automaticamente na fila; não é necessário registar preços manualmente.
 
 Para instalar no telemóvel e ter a lista offline, publique a instalação através de um reverse proxy com **HTTPS válido**. Em Android/PC, use a opção de instalação do navegador; no iPhone, **Partilhar → Adicionar ao ecrã principal**. A forma de instalação varia por navegador. `localhost` é uma exceção de desenvolvimento; um endereço HTTP do NAS não permite todas as funções PWA.
 
@@ -54,23 +58,33 @@ A API verifica a origem dos pedidos de escrita. Configure o proxy para preservar
 
 ## Preços e comparações honestas
 
-O catálogo automático inicial cobre **arroz, massa, leite, azeite e ovos no Continente; arroz e azeite no Auchan**, apenas a primeira página de cada categoria, até 36 referências por página. Não cobre toda a loja nem garante stock, preço físico ou preço de uma localização específica.
+O motor tem fontes de investigação para Continente, Auchan, Pingo Doce, Lidl PT/ES, Aldi PT/ES, Intermarché, Mercadona PT/ES, Makro PT/ES, Recheio, Carrefour, DIA, Eroski e Alcampo. Combina páginas de categoria e de produto com descoberta através dos mapas oficiais do site; não se limita a uma lista fixa de categorias. Novas palavras e produtos da lista alteram a prioridade de pesquisa.
 
-Espanha está disponível na interface, nos perfis e nos preços manuais. **Ainda não há recolha automática espanhola.** A API da Mercadona e a pesquisa dinâmica do Continente restringem robots; não são utilizadas. O Intermarché bloqueou o teste inicial. Não contornamos bloqueios, autenticação ou CAPTCHAs.
+**Ter uma fonte configurada não significa que todos os preços dessa loja estejam disponíveis.** Na validação da versão 0.2 foram lidos preços reais de Continente, Auchan, Pingo Doce, Lidl Portugal, Aldi Portugal/Espanha, DIA e Lidl Espanha. Outras fontes devolveram restrições de acesso, páginas sem preço legível ou apenas mapas de produtos. A aplicação mostra esses estados e programa novas tentativas. Algumas lojas exigem uma localização, conta ou acesso profissional para publicar o preço; a app não inventa esse preço. A cobertura e as respostas mudam ao longo do tempo: consulte sempre o radar da sua instalação.
+
+O registo manual mantém-se como opção para um preço observado numa loja física, não como requisito para usar Espanha ou outras cadeias. Preços publicados podem variar por região, loja e disponibilidade.
 
 Observações com mais de 72 horas ficam fora dos planos. Para datas futuras, apenas entram preços com validade explícita que inclua essa data. Quando as condições de uma oferta automática são ambíguas, a oferta fica fora da otimização. Preços manuais de uma loja concreta continuam a necessitar de confirmação da disponibilidade e condições; o utilizador é responsável por indicar o preço final com IVA. Consulte [as fontes e limitações](docs/SOURCES.md).
 
-Uma lista genérica, por exemplo “arroz carolino”, pode encontrar várias marcas que contenham essas palavras. Adicionar uma referência através de **Explorar preços** fixa esse produto específico. Regras conservadoras excluem algumas substituições erradas, como ovos de codorniz numa pesquisa genérica de ovos, ou farinha numa pesquisa de arroz. A comparação não reconhece automaticamente EAN nem garante equivalência nutricional ou de qualidade. O total considera a quantidade pedida e o número inteiro de embalagens necessário.
+Uma lista genérica, por exemplo “arroz carolino”, encontra alternativas por palavras e famílias de produto. As sugestões agrupam variantes conservadoras — leite magro, meio gordo, sem lactose ou fresco continuam separados. O vocabulário de pesquisa reconhece palavras frequentes nos dois idiomas. Adicionar uma referência específica através de **Explorar preços** fixa esse produto. Regras conservadoras excluem algumas substituições erradas, como ovos de codorniz numa pesquisa genérica de ovos, ou farinha numa pesquisa de arroz. A comparação não reconhece automaticamente EAN nem garante equivalência nutricional ou de qualidade. O total considera a quantidade pedida e o número inteiro de embalagens necessário.
 
-O planeador mostra o custo de deslocação separadamente. Quando faltam distâncias, o total inclui apenas produtos. Desvios indicados manualmente são somados e identificados como estimativas. Com coordenadas, é calculada a ordem mais curta entre as lojas do cabaz, até três paragens; os tempos não incluem trânsito em tempo real nem permanência nas lojas. Lojas profissionais exigem acesso confirmado no perfil. Descontos dependentes de valor mínimo de compra, escalões, combinações ou cupões personalizados não são interpretados automaticamente: registe apenas ofertas cujas condições consegue cumprir.
+O planeador mostra o custo de deslocação separadamente. Quando faltam distâncias, o total inclui apenas produtos. Não existem campos para introduzir quilómetros: são calculados a partir das localizações guardadas. Se o serviço de mapas falhar, a distância fica por confirmar. Com coordenadas, é calculada a ordem mais curta entre as lojas do cabaz, até três paragens; os tempos não incluem trânsito em tempo real nem permanência nas lojas. Lojas profissionais exigem acesso confirmado no perfil. Descontos dependentes de valor mínimo de compra, escalões, combinações ou cupões personalizados não são interpretados automaticamente: registe apenas ofertas cujas condições consegue cumprir.
+
+## Orçamento e poupança do mês
+
+A ligação ao Rumo segue o mês selecionado: não copia o orçamento anterior quando um mês ainda não está preparado. O exportador lê a base de dados em modo só de leitura, filtra a linha **Supermercado** e publica apenas os valores mensais necessários. A instalação recomendada atualiza a exportação a cada 60 segundos; o navegador verifica alterações a cada 15 segundos. Se a exportação estiver indisponível ou tiver mais de cinco minutos, o orçamento é assinalado como indisponível. O acesso exige uma lista explícita de contas autorizadas.
+
+Para medir poupança real, escolha a loja habitual no perfil e confirme o preço pago ao comprar. A referência elegível fica guardada com a compra; futuras alterações de preços não reescrevem o passado. Compras antigas ou registadas offline precisam de uma referência confirmada manualmente para entrar na poupança. Sem referência, contam para gastos. Os quilómetros são automáticos, mas uma ida só entra na poupança líquida depois de registar o seu custo adicional; estimativas ficam identificadas. O resultado é parcial enquanto faltarem compras, referências ou deslocações.
+
+Consulte [Authelia e Rumo](integrations/README.md) para configurar estas integrações noutra instalação. A configuração privada do NAS não é publicada no repositório.
 
 ## Privacidade e serviços externos
 
-Listas, contas, preferências e preços manuais ficam na base de dados da instalação. As observações públicas automáticas são partilhadas entre contas dessa instalação para reduzir pedidos às lojas. As palavras-passe são guardadas com scrypt e os tokens de sessão com hash. A app não inclui analytics, publicidade, fontes externas ou imagens de produtos de terceiros.
+Listas, contas, preferências e preços manuais ficam na base de dados da instalação. As observações públicas automáticas são partilhadas entre contas dessa instalação para reduzir pedidos às lojas. As palavras-passe são guardadas com scrypt e os tokens de sessão com hash. A app não inclui analytics, publicidade ou fontes tipográficas externas. As imagens publicadas pelas lojas são obtidas por um proxy limitado aos domínios de imagens identificados; o navegador não contacta diretamente as lojas. Os direitos das imagens pertencem aos respetivos titulares.
 
 No dispositivo, a lista e uma fila de alterações ficam guardadas para uso offline, associadas à conta. Terminar sessão elimina essa cópia local. Não termine sessão com alterações ainda por sincronizar. A sessão precisa de estar válida para sincronizar; se expirar, volte a entrar na mesma conta.
 
-Use uma zona ou um local público próximo para casa e trabalho, sem dados pessoais. Ao carregar em **Localizar**, envia esse texto ao serviço público Nominatim, sujeito à [política de utilização](https://operations.osmfoundation.org/policies/nominatim/): consultas iniciadas pelo utilizador, sem autocomplete, com cache e no máximo uma por segundo. Ao abrir o plano com coordenadas guardadas, envia coordenadas ao serviço público OSRM. Os operadores podem configurar serviços próprios através de `DESPENSA_GEOCODER_URL` e `DESPENSA_ROUTER_URL`, sem alterar o código. Ambos usam dados [© OpenStreetMap contributors](https://www.openstreetmap.org/copyright); existem cache, limites e tolerância a falhas. Estes serviços públicos não garantem disponibilidade. Não são solicitados GPS, acesso ao calendário, credenciais de supermercados ou o número do cartão de cliente.
+Use uma zona ou um local público próximo para casa e trabalho, sem dados pessoais. Ao guardar casa/trabalho ou carregar em **Localizar**, envia esse texto ao serviço público Nominatim, sujeito à [política de utilização](https://operations.osmfoundation.org/policies/nominatim/): consultas iniciadas pelo utilizador, sem autocomplete, com cache e no máximo uma por segundo. A descoberta de lojas usa localizadores oficiais e Overpass nas duas zonas; as distâncias e os planos usam OSRM. Os serviços de mapas recebem as coordenadas necessárias para essa consulta. Os operadores podem configurar serviços próprios através de `DESPENSA_GEOCODER_URL`, `DESPENSA_OVERPASS_URL` e `DESPENSA_ROUTER_URL`, sem alterar o código. Ambos usam dados [© OpenStreetMap contributors](https://www.openstreetmap.org/copyright); existem cache, limites e tolerância a falhas. Estes serviços públicos não garantem disponibilidade. Não são solicitados GPS, acesso ao calendário, credenciais de supermercados ou o número do cartão de cliente.
 
 ## Desenvolvimento e testes
 
@@ -92,7 +106,7 @@ Para backups consistentes, use a API de backup do SQLite ou pare a aplicação a
 ## Próximos passos
 
 - Aumentar as categorias e criar conectores ibéricos com fontes e permissões adequadas.
-- Validar equivalências por EAN, marcas, tipo e formato, com revisão humana.
+- Alargar equivalências por EAN, marcas, tipo e formato, com revisão humana.
 - Interpretar promoções complexas, compras mínimas e regras de acumulação.
 - Partilhar listas e sincronizar vários membros do mesmo agregado em simultâneo.
 - Alertas de preços e evolução do orçamento.

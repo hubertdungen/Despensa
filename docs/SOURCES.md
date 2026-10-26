@@ -1,42 +1,56 @@
 # Fontes, cobertura e metodologia
 
-## Conectores ativos na versão 0.1
+## Radar automático ibérico (0.2)
 
-| Loja | País | Páginas observadas | Limite |
-|---|---|---|---|
-| Continente | PT | Arroz, massa, leites, azeite, ovos | Primeira página, até 36 referências por categoria |
-| Auchan | PT | Arroz, azeite | Primeira página, até 36 referências por categoria |
+A investigação é automática para os produtos da lista e as palavras pesquisadas. `research.py` contém o registo de fontes, os métodos alternativos e a fila persistente; `catalog.py` mantém os formatos e conectores específicos. Há fontes configuradas para as principais cadeias portuguesas e espanholas, incluindo lojas profissionais. O estado de cada fonte aparece no radar: programada, a investigar, com preços, a descobrir páginas, parcialmente disponível ou com nova tentativa prevista.
 
-As URLs exatas estão em `catalog.py:CATEGORY_SOURCES`. Cada recolha volta a consultar `robots.txt` no máximo a cada seis horas, verifica a permissão para a página e faz um pedido por categoria com uma pausa de dois segundos. Há identificação do robot, timeouts e limites; falhas não apagam a última observação. Não há paginação massiva, navegação autenticada, cookies de contas das lojas, proxies rotativos ou resolução de CAPTCHA.
+Uma passagem não equivale a recolher uma loja inteira. O orçamento inicial é de seis páginas por cadeia por passagem, no máximo duas de mapas do site. As páginas ainda não visitadas ficam na base de dados. A prioridade reconhece palavras portuguesas/espanholas e reparte as consultas pelos produtos pedidos; não favorece para sempre um único termo. A descoberta continua entre atualizações de preços. O limite de segurança da fila é de 200 mil URLs por cadeia.
 
-O resultado é uma observação do catálogo público online **sem localização específica confirmada**. Não comprova stock nem preço numa loja física. Não implica uma parceria, API oficial ou autorização para redistribuição irrestrita de conteúdos. O repositório distribui o software, não uma base de dados comercial das lojas. Os termos de utilização e condições de acesso podem mudar: cada instalação deve verificar a adequação das fontes ao seu uso.
+### Métodos complementares
 
-No teste inicial, o Intermarché devolveu 403. A API da Mercadona e a pesquisa interna do Continente restringem robots e não são utilizadas pela aplicação. A resposta inicial de diagnóstico não é usada como um feed. Não existe conector automático espanhol ativo.
+1. Leitura do preço apresentado nas páginas de categoria, quando existe um formato identificado (Continente/Auchan).
+2. JSON-LD `Product/Offer` publicado pela própria loja em páginas de produto.
+3. Dados de catálogo embebidos na página, incluindo o catálogo ALDI em Next.js: preço, formato, datas e disponibilidade.
+4. Microdados de produto quando o JSON-LD falta ou não pode ser interpretado.
+5. Mapas oficiais do site e ligações públicas para descobrir outras páginas de produto/categoria. Este método descobre URLs; não transforma uma URL num preço.
+6. No Pingo Doce, JSON-LD para identificar o produto e o preço visível dentro do bloco desse produto. O valor do minicarrinho não é usado.
 
-## O que é guardado
+Os métodos de leitura são independentes. Um JSON inválido não impede os outros leitores; uma página de categoria alterada pode ser substituída por uma página de produto descoberta no mapa. Uma fonte totalmente inacessível não é apresentada como coberta.
 
-- ID composto pela loja e referência, nome e marca publicados.
-- Preço exibido em cêntimos de euro, privilegiando o preço visível sobre metadados analíticos.
-- Quantidade e unidade quando o formato é explícito; formatos ambíguos ficam sem normalização e fora do planeador.
-- URL da fonte, loja, país, canal, momento da observação e localização por confirmar.
-- Condições reconhecidas ou indicação de que precisam de confirmação. Deteção de condições é conservadora, mas não substitui a consulta da fonte.
+O robot identifica-se, aplica pausas de pelo menos dois segundos por domínio, limites de tamanho, timeouts e cache. Consulta `robots.txt` antes da recolha e não contorna autenticação, CAPTCHAs ou restrições de acesso. Os redirecionamentos de investigação estão limitados ao mesmo retalhista. Falhas preservam observações anteriores e têm espera progressiva: 15 min, 30 min, 1 h, até 24 h. A fila e o estado sobrevivem a reinícios.
 
-Não são copiadas fotografias, descrições longas, dados de login ou números de cartões. Referências indisponíveis ou mudanças no catálogo não podem ser confirmadas em tempo real: cada recomendação deve ser verificada na loja.
+### Validação real e limites
+
+Na validação da versão 0.2 foram extraídos preços reais de **Continente, Auchan, Pingo Doce, Lidl PT, ALDI PT/ES, DIA e Lidl ES**, através de métodos diferentes. A resposta de uma fonte pode mudar entre tentativas. Algumas fontes devolveram HTTP 403, verificação de acesso, mapas sem preço ou páginas sem preço legível; essas tentativas ficam identificadas e são repetidas com espera. Mercadona PT/ES, Intermarché, Makro, Recheio, Carrefour, Alcampo e Eroski têm mecanismos de descoberta/investigação configurados, mas isso não constitui garantia de preços disponíveis.
+
+Não se promete o preço mais baixo de todo o mercado nem o catálogo integral de todas as lojas. Também não se transforma uma falha automática na obrigação de introduzir preços manualmente: o radar continua a investigar. O registo manual é uma opção adicional para preços observados fisicamente.
+
+## Observações e imagens
+
+Guardamos referência, nome/marca, preço em cêntimos, formato/unidade quando explícitos, fonte, país, canal, condição, validade e momento da observação. As fotografias publicadas pelas lojas podem aparecer através de um proxy com uma lista fixa de domínios/caminhos, limite de 2 MB por imagem, tipos de imagem permitidos e cache em memória de até 16 MB. O navegador não recebe cookies das lojas nem lhes envia os seus próprios cookies. O endpoint não aceita URLs arbitrárias. Os direitos das fotografias e marcas pertencem aos titulares; o código não concede direitos sobre esses conteúdos.
+
+O repositório distribui software, não uma base de dados comercial das lojas. Preços publicados podem variar por região, disponibilidade e localização. Uma observação não confirma stock numa loja concreta. A aplicação não recolhe credenciais de supermercados ou números de cartões.
 
 ## Correspondência e custo
 
-Regras conservadoras excluem algumas substituições de famílias de produto, como ovos de codorniz para uma pesquisa genérica de ovos ou farinha para uma pesquisa de arroz. Uma pesquisa explícita pode incluir essas variantes. Estas regras não garantem equivalência. As palavras da pesquisa têm de existir no nome da oferta após normalização de acentos e maiúsculas. Não há correspondência semântica por IA nem certificação de equivalência. Pode fixar uma referência específica a partir do catálogo. Para quantidades em kg/l/un, o custo é `ceil(quantidade necessária / conteúdo da embalagem) × preço da embalagem`, sem dividir embalagens nem assumir que uma embalagem de menor preço unitário é a compra mais barata.
+As sugestões reconhecem famílias conservadoras. Leite magro, meio gordo, sem lactose, fresco e biológico são separados quando a informação está presente. Palavras frequentes são normalizadas entre português e espanhol. Famílias não reconhecidas ficam como referências individuais. Não há certificação de equivalência nutricional ou de qualidade entre marcas.
 
-Só entram lojas ativas e países selecionados no perfil, requisitos de acesso satisfeitos, preços com IVA, observações até 72 horas e validade compatível. Para datas futuras é exigida validade explícita. Preços apenas públicos não se tornam automaticamente preços válidos de uma promoção futura. Condições desconhecidas são excluídas. O saldo futuro não reduz o pagamento atual.
+Uma referência específica pode ser fixada. Uma lista genérica procura alternativas pelas palavras/família escolhidas. Para kg/l/un, o custo é `ceil(quantidade / conteúdo da embalagem) × preço da embalagem`: uma unidade mais barata não implica necessariamente um cabaz mais barato. O histórico guarda preços observados, sem inventar preços anteriores.
 
-Os planos são ordenados primeiro pela cobertura, depois pelo custo observado e número de paragens. Um total com distância desconhecida é apenas um subtotal de produtos. Não compare como custo final dois planos em que só um inclui deslocações. A interface deve mostrar essa limitação; nenhum preço ausente é zero.
+Só entram no plano lojas/países ativos, acesso profissional satisfeito, IVA incluído, observações com até 72 h e validade compatível com a data. Para datas futuras é exigida validade explícita. Condições desconhecidas ficam fora da otimização. Cartão não equivale a cupão. EntregaZero é uma subscrição de entregas e não desbloqueia automaticamente descontos em produtos. Saldo futuro não reduz o pagamento de hoje. Promoções por combinações ou valor mínimo não são presumidas elegíveis.
 
-Preços manuais pertencem à conta que os criou. O utilizador indica local, IVA, validade e condições. Não há auditoria independente dos talões nem integração automática com cupões privados. Compras mínimas, promoções “leve/pague”, escalões e combinações de cupões ficam fora do motor inicial.
+## Lojas próximas e percursos
 
-## Localizações e percursos
+A descoberta consulta separadamente as zonas de **casa e trabalho**. Localizadores oficiais de [Continente](https://feed.continente.pt/lojas) e [Auchan](https://www.auchan.pt/pt/lojas) dão coordenadas verificáveis; [Overpass](https://wiki.openstreetmap.org/wiki/Overpass_API) alarga a pesquisa às outras cadeias em Portugal e Espanha. A ausência de resposta do serviço de mapas não elimina as lojas dos localizadores oficiais. A cobertura parcial é assinalada.
 
-Geocodificação: [Nominatim](https://operations.osmfoundation.org/policies/nominatim/), só quando o utilizador carrega em Localizar, sem autocomplete. Identificação do cliente, cache e limite global de uma consulta por segundo por processo. A instância é pequena e pessoal; instalações públicas com utilização elevada devem contratar ou alojar um serviço apropriado.
+A zona inicial tem raio de 6 km por origem. Preservam-se até 12 candidatos de cada zona (24 no conjunto), calculando distâncias rodoviárias e o desvio trabalho→loja→casa. Cada cadeia pode fornecer até três filiais candidatas ao planeador, que considera até três paragens e a assimetria das estradas.
 
-Distâncias: [OSRM Table API](https://project-osrm.org/docs/v5.24.0/api/#table-service), com uma matriz para as localizações necessárias, até oito lojas com coordenadas. A escolha de até três paragens considera a assimetria dos trajetos. O desvio é a distância do percurso com compras menos o percurso base (casa→casa ou trabalho→casa). As coordenadas são enviadas ao serviço externo; resultados ficam em cache durante seis horas. Não há trânsito em tempo real. Se o serviço falhar, a app pode usar os desvios manuais, explicitamente identificados.
+Geocodificação: [Nominatim](https://operations.osmfoundation.org/policies/nominatim/), ao guardar zonas ou carregar em Localizar, sem autocomplete, com cache e máximo uma consulta por segundo. Se houver ambiguidade, o utilizador escolhe o resultado. Distâncias: [OSRM](https://project-osrm.org/docs/v5.24.0/api/#table-service), cache de seis horas. Descoberta: cache de 24 h; falhas sem resultados têm espera de cinco minutos. Operadores podem configurar os próprios serviços. Dados: [© OpenStreetMap contributors](https://www.openstreetmap.org/copyright).
 
-Dados geográficos: [© OpenStreetMap contributors](https://www.openstreetmap.org/copyright). Não existem garantias de disponibilidade dos endpoints públicos.
+Os quilómetros são calculados automaticamente. O desvio é o percurso com compras menos o percurso base (casa→casa ou trabalho→casa). Sem resposta rodoviária não há quilómetros inventados: na descoberta pode mostrar linha reta claramente identificada; no plano a deslocação fica por confirmar e o total é apenas de produtos. Não há trânsito em tempo real nem tempo de permanência nas lojas.
+
+## Poupança mensal
+
+A poupança registada é `referência confirmada − valor efetivamente pago`, por compra. A referência é guardada na data da compra, usando uma oferta elegível da loja habitual e embalagens inteiras ou um total expressamente confirmado. Compras offline/passadas não recebem retroativamente preços automáticos atuais. Sem referência, a compra conta para gastos mas não para poupança. O resultado pode ser negativo.
+
+Custos adicionais de deslocação só entram depois de registados e ficam identificados quando estimados. A aplicação mostra dados em falta e não apresenta a diferença para a oferta mais cara do catálogo como dinheiro já poupado. As compras e referências pertencem à conta, têm identificadores idempotentes e são exportáveis. Não há verificação independente de talões.

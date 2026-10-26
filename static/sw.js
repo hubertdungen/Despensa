@@ -1,8 +1,9 @@
-const CACHE = "despensa-shell-v1";
+const CACHE = "despensa-shell-v2";
 const SHELL = [
   "/",
   "/static/style.css",
   "/static/app.js",
+  "/static/features.js",
   "/logo.svg",
   "/icon-192.png",
   "/icon-512.png",

@@ -18,7 +18,7 @@ jobs:
           node-version: '24'
       - run: pip install -r requirements-dev.txt
       - run: python -m pytest -q
-      - run: node --check static/app.js
+      - run: npm run check
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e

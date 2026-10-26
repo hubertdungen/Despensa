@@ -1,5 +1,6 @@
 """Despensa: personal grocery lists, observed prices and explainable shopping plans."""
 import hashlib
+import hmac
 import json
 import logging
 import os
@@ -13,13 +14,14 @@ from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
 from functools import wraps
 from pathlib import Path
+from decimal import InvalidOperation
 from urllib.parse import urlsplit
 
-from flask import Flask, g, jsonify, request, send_from_directory
+from flask import Flask, g, jsonify, request, send_from_directory, Response
 from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from catalog import STORE_MAP, cents, fold
+from catalog import STORE_MAP, cents, fold, product_text
 from planner import make_plan
 
 ROOT = Path(__file__).resolve().parent
@@ -27,12 +29,15 @@ SCHEMA = '''
 CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, password TEXT NOT NULL, created TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id TEXT NOT NULL,expires REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS profiles(user_id TEXT PRIMARY KEY,data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS identities(provider TEXT NOT NULL,subject TEXT NOT NULL,user_id TEXT NOT NULL,PRIMARY KEY(provider,subject));
 CREATE TABLE IF NOT EXISTS items(id TEXT PRIMARY KEY,user_id TEXT NOT NULL,month TEXT NOT NULL,data TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS item_owner ON items(user_id,month);
 CREATE TABLE IF NOT EXISTS offers(id TEXT PRIMARY KEY,user_id TEXT NOT NULL DEFAULT '',store TEXT NOT NULL,data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS history(offer_id TEXT NOT NULL,observed TEXT NOT NULL,price INTEGER NOT NULL,PRIMARY KEY(offer_id,observed));
 CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,status TEXT NOT NULL,created TEXT NOT NULL,finished TEXT,data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY,value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS purchases(id TEXT PRIMARY KEY,user_id TEXT NOT NULL,month TEXT NOT NULL,item_id TEXT NOT NULL,data TEXT NOT NULL,UNIQUE(user_id,item_id));
+CREATE TABLE IF NOT EXISTS trips(id TEXT PRIMARY KEY,user_id TEXT NOT NULL,month TEXT NOT NULL,data TEXT NOT NULL);
 '''
 
 
@@ -41,20 +46,40 @@ def utcnow():
 
 
 def default_profile():
-    return dict(locale='pt-PT', countries=['PT'], budget=250, interval_hours=24, automatic=True,
+    return dict(locale='pt-PT', countries=['PT'], budget=250, budget_source='auto', reference_store='', interval_hours=24, automatic=True,
         max_stops=2, cost_per_km=.20, home='', work='', home_coords=None, work_coords=None,
-        workdays=[0, 1, 2, 3, 4], stores={s: dict(enabled=s in ('continente', 'auchan'), card=False,
-        subscription=False, access=False, coupons=[], extra_km=None, address='', coords=None) for s in STORE_MAP})
+        workdays=[0, 1, 2, 3, 4], stores={s: dict(enabled=not STORE_MAP[s]['professional'], card=False,
+        subscription=False, delivery_subscription=False, access=False, coupons=[], extra_km=None, address='', coords=None) for s in STORE_MAP})
 
 
 def create_app(data_dir=None, testing=False):
     app = Flask(__name__, static_folder='static', static_url_path='/static')
     app.config.update(TESTING=testing, MAX_CONTENT_LENGTH=1_000_000, JSON_AS_ASCII=False)
+    auth_mode = os.environ.get('DESPENSA_AUTH_MODE', 'local')
+    if auth_mode not in ('local', 'proxy'):
+        raise ValueError('DESPENSA_AUTH_MODE must be local or proxy')
+    proxy_secret = ''
+    if auth_mode == 'proxy':
+        secret_file = os.environ.get('DESPENSA_PROXY_SECRET_FILE', '')
+        if secret_file:
+            proxy_secret = Path(secret_file).read_text().strip()
+        if len(proxy_secret) < 32:
+            raise ValueError('Proxy authentication requires a secret file with at least 32 characters')
+    auth_info = dict(mode=auth_mode, login_url=os.environ.get('DESPENSA_LOGIN_URL', ''),
+        logout_url=os.environ.get('DESPENSA_LOGOUT_URL', ''),settings_url=os.environ.get('DESPENSA_AUTH_SETTINGS_URL',''))
+    if auth_mode == 'proxy' and not auth_info['settings_url'] and auth_info['logout_url']:
+        portal=urlsplit(auth_info['logout_url'])
+        auth_info['settings_url']=f'{portal.scheme}://{portal.netloc}/settings'
+    for key in ('login_url', 'logout_url','settings_url'):
+        if auth_info[key] and (urlsplit(auth_info[key]).scheme != 'https' or not urlsplit(auth_info[key]).netloc):
+            raise ValueError('Authentication URLs must use HTTPS')
     folder = Path(data_dir or os.environ.get('DESPENSA_DATA', ROOT / 'data'))
     folder.mkdir(mode=0o700, parents=True, exist_ok=True)
     app.config['DATABASE'] = str(folder / 'despensa.sqlite3')
     with sqlite3.connect(app.config['DATABASE']) as db:
         db.executescript(SCHEMA)
+        from research import setup
+        setup(db)
         db.execute('PRAGMA journal_mode=WAL')
         # A process restart must not strand an interrupted refresh indefinitely.
         db.execute("UPDATE jobs SET status='interrupted',finished=? WHERE status='running'", (utcnow(),))
@@ -77,11 +102,36 @@ def create_app(data_dir=None, testing=False):
     def profile(uid):
         with database() as db:
             row = db.execute('SELECT data FROM profiles WHERE user_id=?', (uid,)).fetchone()
-        return json.loads(row['data']) if row else default_profile()
+        defaults = default_profile()
+        saved = json.loads(row['data']) if row else {}
+        stores = saved.pop('stores', {})
+        defaults.update(saved)
+        for sid, values in stores.items():
+            if sid in defaults['stores']:
+                defaults['stores'][sid].update(values)
+        return defaults
 
     def require_user(fn):
         @wraps(fn)
         def wrapped(*args, **kwargs):
+            if auth_mode == 'proxy':
+                supplied = request.headers.get('X-Despensa-Proxy-Token', '')
+                subject = request.headers.get('Remote-User', '').strip()
+                if (not hmac.compare_digest(supplied.encode(), proxy_secret.encode())
+                        or not subject or len(subject) > 200 or any(ord(c) < 32 for c in subject)):
+                    return jsonify(error='Autenticação Authelia necessária', code='proxy_auth_required', auth=auth_info), 401
+                with database() as db:
+                    # Serialize first-use provisioning; never merge accounts merely by username.
+                    db.execute('BEGIN IMMEDIATE')
+                    row = db.execute('SELECT users.id,users.username FROM identities JOIN users ON users.id=identities.user_id WHERE provider=? AND subject=?', ('authelia', subject)).fetchone()
+                    if not row:
+                        uid = uuid.uuid4().hex
+                        db.execute('INSERT INTO users VALUES(?,?,?,?)', (uid, 'authelia:' + subject, '', utcnow()))
+                        db.execute('INSERT INTO profiles VALUES(?,?)', (uid, json.dumps(default_profile())))
+                        db.execute('INSERT INTO identities VALUES(?,?,?)', ('authelia', subject, uid))
+                        row = dict(id=uid)
+                g.user = dict(id=row['id'], username=subject)
+                return fn(*args, **kwargs)
             raw = request.cookies.get('despensa_session', '')
             token = hashlib.sha256(raw.encode()).hexdigest()
             with database() as db:
@@ -117,7 +167,7 @@ def create_app(data_dir=None, testing=False):
     def error_handler(err):
         if isinstance(err, HTTPException):
             return jsonify(error=err.description), err.code
-        if isinstance(err, (ValueError, TypeError)):
+        if isinstance(err, (ValueError, TypeError, InvalidOperation)):
             return jsonify(error=str(err)[:200]), 400
         app.logger.exception('Request failed')
         return jsonify(error='Não foi possível concluir. Tente novamente.'), 500
@@ -136,15 +186,25 @@ def create_app(data_dir=None, testing=False):
     def health():
         with database() as db:
             db.execute('SELECT 1')
-        return jsonify(ok=True, app='Despensa', version='0.1.0')
+        return jsonify(ok=True, app='Despensa', version='0.2.0')
 
     login_attempts = {}
     login_lock = threading.Lock()
+
+    @app.get('/api/auth/info')
+    def authentication_info():
+        return jsonify(auth=auth_info)
 
     @app.post('/api/auth/<action>')
     def authenticate(action):
         if action not in ('login', 'register', 'logout'):
             return jsonify(error='Não encontrado'), 404
+        if auth_mode == 'proxy':
+            if action == 'logout':
+                response = jsonify(ok=True, redirect=auth_info['logout_url'])
+                response.delete_cookie('despensa_session', path='/')
+                return response
+            return jsonify(error='Utilize a sessão Authelia', code='proxy_auth_required', auth=auth_info), 403
         if action == 'logout':
             with database() as db:
                 db.execute('DELETE FROM sessions WHERE token=?', (hashlib.sha256(request.cookies.get('despensa_session', '').encode()).hexdigest(),))
@@ -192,7 +252,7 @@ def create_app(data_dir=None, testing=False):
     @app.get('/api/me')
     @require_user
     def me():
-        return jsonify(user=g.user, profile=profile(g.user['id']), stores=list(STORE_MAP.values()))
+        return jsonify(user=g.user, profile=profile(g.user['id']), stores=list(STORE_MAP.values()), auth=auth_info)
 
     @app.put('/api/profile')
     @require_user
@@ -215,13 +275,28 @@ def create_app(data_dir=None, testing=False):
                 raise ValueError(f'Valor inválido: {key}')
             p[key] = int(value) if key in ('interval_hours', 'max_stops') else value
         p['automatic'] = bool(d.get('automatic', p['automatic']))
+        p['budget_source'] = 'manual' if d.get('budget_source', p.get('budget_source')) == 'manual' else 'auto'
+        ref=str(d.get('reference_store', p.get('reference_store','')))
+        if ref and ref not in STORE_MAP:
+            raise ValueError('Loja de referência inválida')
+        p['reference_store']=ref
         p['workdays'] = sorted({int(x) for x in d.get('workdays', p['workdays']) if str(x).isdigit() and 0 <= int(x) <= 6})
         for sid, value in d.get('stores', {}).items():
             if sid not in STORE_MAP or not isinstance(value, dict):
                 continue
             current = p['stores'][sid]
-            for key in ('enabled', 'card', 'subscription', 'access'):
-                current[key] = bool(value.get(key, current[key]))
+            for key in ('enabled', 'card', 'subscription', 'delivery_subscription', 'access'):
+                current[key] = bool(value.get(key, current.get(key, False)))
+            store = STORE_MAP[sid]
+            if not store['loyalty']:
+                current['card'] = False
+            subscription = store['subscription']
+            if not subscription or subscription['kind'] != 'product':
+                current['subscription'] = False
+            if not subscription or subscription['kind'] != 'delivery':
+                current['delivery_subscription'] = False
+            if not store['professional']:
+                current['access'] = False
             current['address'] = str(value.get('address', current.get('address', '')))[:300]
             current['coupons'] = [str(c)[:60] for c in value.get('coupons', current['coupons'])][:30]
             km = value.get('extra_km', current.get('extra_km'))
@@ -246,6 +321,21 @@ def create_app(data_dir=None, testing=False):
         with database() as db:
             return [dict(json.loads(r['data']), id=r['id']) for r in db.execute('SELECT * FROM items WHERE user_id=? AND month=? ORDER BY rowid', (uid, month))]
 
+    @app.get('/api/budget')
+    @require_user
+    def budget():
+        from budget import monthly_budget
+        return jsonify(budget=monthly_budget(g.user['id'], profile(g.user['id']), month_arg()))
+
+    @app.get('/api/nearby')
+    @require_user
+    def nearby():
+        from nearby import discover
+        try:
+            return jsonify(nearby=discover(profile(g.user['id'])))
+        except Exception:
+            return jsonify(nearby=dict(stores=[],status='unavailable',distance_method='unavailable'))
+
     @app.get('/api/items')
     @require_user
     def items():
@@ -262,7 +352,8 @@ def create_app(data_dir=None, testing=False):
         if needed:
             date.fromisoformat(needed)
         return dict(name=name, query=query, quantity=quantity, unit=unit, checked=bool(d.get('checked', False)),
-            category=str(d.get('category', 'Mercearia'))[:60], needed_on=needed, offer_id=str(d.get('offer_id', ''))[:120], note=str(d.get('note', ''))[:300])
+            category=str(d.get('category', 'Mercearia'))[:60], needed_on=needed, offer_id=str(d.get('offer_id', ''))[:120],
+            family=str(d.get('family', ''))[:200], note=str(d.get('note', ''))[:300])
 
     @app.post('/api/items')
     @require_user
@@ -279,6 +370,8 @@ def create_app(data_dir=None, testing=False):
             if db.execute('SELECT COUNT(*) FROM items WHERE user_id=? AND month=?', (g.user['id'], month_arg(d.get('month')))).fetchone()[0] >= 300:
                 raise ValueError('Limite de 300 produtos por mês')
             db.execute('INSERT INTO items VALUES(?,?,?,?)', (iid, g.user['id'], month_arg(d.get('month')), json.dumps(item)))
+            from research import request_query
+            request_query(db, item['query'])
         return jsonify(item=dict(item, id=iid)), 201
 
     @app.route('/api/items/<iid>', methods=['PATCH', 'DELETE'])
@@ -293,6 +386,9 @@ def create_app(data_dir=None, testing=False):
                 return jsonify(ok=True)
             item = clean_item(dict(json.loads(row['data']), **request.get_json()))
             db.execute('UPDATE items SET data=? WHERE id=? AND user_id=?', (json.dumps(item), iid, g.user['id']))
+            if any(k in request.get_json() for k in ('name', 'query', 'family')):
+                from research import request_query
+                request_query(db, item['query'])
         return jsonify(item=dict(item, id=iid))
 
     @app.post('/api/items/copy')
@@ -322,12 +418,42 @@ def create_app(data_dir=None, testing=False):
     @require_user
     def offers():
         p = profile(g.user['id'])
-        words = fold(request.args.get('q', '')[:120]).split()
+        words = product_text(request.args.get('q', '')[:120]).split()
+        if words:
+            from research import request_query
+            with database() as db:
+                request_query(db, ' '.join(words))
         store = request.args.get('store', '')
-        found = [o for o in get_offers(g.user['id']) if all(w in fold(o['name']).split() for w in words)
+        found = [o for o in get_offers(g.user['id']) if all(w in product_text(o['name']).split() for w in words)
             and o['country'] in p['countries'] and (not store or o['store'] == store)]
         found.sort(key=lambda o: (o['price_cents'] / o['size'] if o.get('size') else 1e9, o['name']))
-        return jsonify(offers=found[:200], total=len(found), observed_only=True)
+        from products import comparisons
+        return jsonify(offers=found[:200], comparisons=comparisons(found[:300], p), total=len(found), observed_only=True)
+
+    @app.get('/api/research')
+    @require_user
+    def research_status():
+        p = profile(g.user['id'])
+        with database() as db:
+            states = {r['store']: json.loads(r['data']) for r in db.execute('SELECT * FROM research_sources')}
+        return jsonify(sources=[dict(states.get(sid,dict(status='pending',count=0,methods=[],indexed=0)),store=sid)
+            for sid, s in STORE_MAP.items() if s['country'] in p['countries']])
+
+    @app.get('/api/image')
+    @require_user
+    def product_image():
+        from images import thumbnail
+        oid=request.args.get('id','')
+        offer=next((o for o in get_offers(g.user['id']) if o['id']==oid),None)
+        if not offer:
+            return '',404
+        try:
+            data=thumbnail(offer)
+            if data:
+                return Response(data[0],mimetype=data[1])
+        except Exception:
+            pass
+        return '',404
 
     @app.get('/api/history')
     @require_user
@@ -351,6 +477,13 @@ def create_app(data_dir=None, testing=False):
         condition = d.get('condition', 'public')
         if not name or not 0 < size <= 10000 or unit not in ('kg', 'l', 'un') or condition not in ('public', 'card', 'subscription', 'coupon', 'professional'):
             raise ValueError('Preço ou formato inválido')
+        capability = STORE_MAP[store]
+        if condition in ('card', 'coupon') and not capability['loyalty']:
+            raise ValueError('Esta loja não tem um programa de fidelização configurado')
+        if condition == 'subscription' and (not capability['subscription'] or capability['subscription']['kind'] != 'product'):
+            raise ValueError('Uma subscrição de entregas não é um desconto no produto')
+        if condition == 'professional' and not capability['professional']:
+            raise ValueError('Esta loja não exige acesso profissional')
         start, end = str(d.get('valid_from', '')), str(d.get('valid_to', ''))
         if start:
             date.fromisoformat(start)
@@ -399,7 +532,10 @@ def create_app(data_dir=None, testing=False):
             from planner import eligible, match
             ids = sorted({o['store'] for o in offers if eligible(o, p, day) and any(match(i, o) for i in items if not i['checked'])})
             try:
-                road = road_matrix(p, ids, day, request.args.get('route', 'auto'))
+                from nearby import discover
+                # Reuse cached discovery; querying both origins is bounded and cached for a day.
+                branches = discover(p)['stores'] if p.get('home_coords') else []
+                road = road_matrix(p, ids, day, request.args.get('route', 'auto'), branches=branches)
             except Exception:
                 route_error = True
         result = make_plan(items, offers, p, day, road=road)
@@ -426,7 +562,125 @@ def create_app(data_dir=None, testing=False):
                 job['data'] = json.loads(job['data'])
             count = db.execute("SELECT count(*) FROM offers WHERE user_id='' OR user_id=?", (g.user['id'],)).fetchone()[0]
             meta = {r['key']: json.loads(r['value']) for r in db.execute('SELECT * FROM meta')}
-        return jsonify(jobs=jobs, offer_count=count, meta=meta)
+            sources = {r['store']: json.loads(r['data']) for r in db.execute('SELECT * FROM research_sources')}
+        return jsonify(jobs=jobs, offer_count=count, meta=meta, sources=sources)
+
+    @app.post('/api/purchases')
+    @require_user
+    def record_purchase():
+        import math
+        from decimal import Decimal, ROUND_HALF_UP
+        from planner import eligible, match
+        d=request.get_json()
+        pid=str(d.get('id',''))
+        if not re.fullmatch('[a-f0-9]{32}',pid):
+            raise ValueError('Identificador de compra inválido')
+        day=str(d.get('purchased_on',date.today().isoformat()))
+        if date.fromisoformat(day)>date.today():
+            raise ValueError('A compra não pode ter uma data futura')
+        paid=Decimal(str(d.get('paid','')).replace(',','.'))
+        if not paid.is_finite() or not 0<=paid<=100000:
+            raise ValueError('Preço pago inválido')
+        paid_cents=int((paid*100).quantize(Decimal('1'),rounding=ROUND_HALF_UP))
+        sid=str(d.get('store',''))
+        if sid not in STORE_MAP:
+            raise ValueError('Loja inválida')
+        with database() as db:
+            old=db.execute('SELECT data FROM purchases WHERE id=? AND user_id=?',(pid,g.user['id'])).fetchone()
+            if old:
+                return jsonify(purchase=json.loads(old['data']))
+            row=db.execute('SELECT * FROM items WHERE id=? AND user_id=?',(str(d.get('item_id','')),g.user['id'])).fetchone()
+            if not row:
+                return jsonify(error='Produto não encontrado'),404
+            item=json.loads(row['data'])
+            if day[:7]!=row['month']:
+                raise ValueError('A data da compra deve pertencer ao mês da lista')
+            quantity=float(d.get('quantity',item['quantity']))
+            if not 0<quantity<=10000:
+                raise ValueError('Quantidade inválida')
+            item_for_comparison=dict(item,quantity=quantity)
+            p=profile(g.user['id'])
+            ref=p.get('reference_store','')
+            candidates=[] if d.get('offline') or day!=date.today().isoformat() else [o for o in get_offers(g.user['id']) if o['store']==ref and eligible(o,p,day) and match(item_for_comparison,o)]
+            benchmark=min(candidates,key=lambda o:math.ceil(round(quantity/o['size'],9))*o['price_cents']) if candidates else None
+            reference_cents=math.ceil(round(quantity/benchmark['size'],9))*benchmark['price_cents'] if benchmark else None
+            reference_kind='catalog' if benchmark else None
+            manual_reference=d.get('reference_price')
+            if manual_reference not in ('',None):
+                number=Decimal(str(manual_reference).replace(',','.'))
+                if not number.is_finite() or not 0<=number<=100000:
+                    raise ValueError('Preço de referência inválido')
+                reference_cents=int((number*100).quantize(Decimal('1'),rounding=ROUND_HALF_UP))
+                reference_kind='manual'
+            purchase=dict(id=pid,item_id=row['id'],name=item['name'],quantity=quantity,unit=item['unit'],store=sid,
+                purchased_on=day,paid_cents=paid_cents,reference_cents=reference_cents,reference_store=ref,
+                reference_kind=reference_kind,reference_offer=benchmark if reference_kind=='catalog' else None,
+                savings_cents=reference_cents-paid_cents if reference_cents is not None else None,recorded_at=utcnow())
+            try:
+                db.execute('INSERT INTO purchases VALUES(?,?,?,?,?)',(pid,g.user['id'],row['month'],row['id'],json.dumps(purchase)))
+            except sqlite3.IntegrityError:
+                return jsonify(error='Já existe uma compra registada para este produto. Elimine o registo anterior para corrigir.'),409
+            item['checked']=True
+            db.execute('UPDATE items SET data=? WHERE id=? AND user_id=?',(json.dumps(item),row['id'],g.user['id']))
+        return jsonify(purchase=purchase),201
+
+    @app.delete('/api/purchases/<pid>')
+    @require_user
+    def delete_purchase(pid):
+        with database() as db:
+            row=db.execute('SELECT item_id FROM purchases WHERE id=? AND user_id=?',(pid,g.user['id'])).fetchone()
+            if row:
+                item=db.execute('SELECT data FROM items WHERE id=? AND user_id=?',(row['item_id'],g.user['id'])).fetchone()
+                if item:
+                    data=json.loads(item['data']);data['checked']=False
+                    db.execute('UPDATE items SET data=? WHERE id=? AND user_id=?',(json.dumps(data),row['item_id'],g.user['id']))
+                db.execute('DELETE FROM purchases WHERE id=? AND user_id=?',(pid,g.user['id']))
+        return jsonify(ok=True)
+
+    @app.post('/api/trips')
+    @require_user
+    def record_trip():
+        from decimal import Decimal, ROUND_HALF_UP
+        d=request.get_json()
+        tid=str(d.get('id',''))
+        if not re.fullmatch('[a-f0-9]{32}',tid):
+            raise ValueError('Identificador inválido')
+        day=str(d.get('day',date.today().isoformat()))
+        if date.fromisoformat(day)>date.today():
+            raise ValueError('Não pode registar uma deslocação futura')
+        amount=Decimal(str(d.get('cost','')).replace(',','.'))
+        if not amount.is_finite() or not 0<=amount<=10000:
+            raise ValueError('Custo inválido')
+        trip=dict(id=tid,day=day,cost_cents=int((amount*100).quantize(Decimal('1'),rounding=ROUND_HALF_UP)),
+            estimated=bool(d.get('estimated',False)),note=str(d.get('note',''))[:200])
+        with database() as db:
+            db.execute('INSERT OR IGNORE INTO trips VALUES(?,?,?,?)',(tid,g.user['id'],day[:7],json.dumps(trip)))
+        return jsonify(trip=trip),201
+
+    @app.delete('/api/trips/<tid>')
+    @require_user
+    def delete_trip(tid):
+        with database() as db:
+            db.execute('DELETE FROM trips WHERE id=? AND user_id=?',(tid,g.user['id']))
+        return jsonify(ok=True)
+
+    @app.get('/api/savings')
+    @require_user
+    def savings():
+        month=month_arg()
+        with database() as db:
+            purchases=[json.loads(r['data']) for r in db.execute('SELECT data FROM purchases WHERE user_id=? AND month=? ORDER BY rowid DESC',(g.user['id'],month))]
+            trips=[json.loads(r['data']) for r in db.execute('SELECT data FROM trips WHERE user_id=? AND month=? ORDER BY rowid DESC',(g.user['id'],month))]
+        benchmarked=[p for p in purchases if p['reference_cents'] is not None]
+        gross=sum(p['savings_cents'] for p in benchmarked)
+        travel=sum(t['cost_cents'] for t in trips)
+        recorded_ids={p['item_id'] for p in purchases}
+        unpriced=sum(i['checked'] and i['id'] not in recorded_ids for i in get_items(g.user['id'],month))
+        return jsonify(savings=dict(month=month,purchases=purchases,trips=trips,spent_cents=sum(p['paid_cents'] for p in purchases),
+            compared_count=len(benchmarked),purchase_count=len(purchases),unpriced_count=unpriced,
+            product_savings_cents=gross if benchmarked else None,travel_cents=travel if trips else None,
+            net_savings_cents=gross-travel if benchmarked and trips else None,
+            travel_estimated=any(t.get('estimated') for t in trips),partial=len(benchmarked)!=len(purchases) or unpriced>0))
 
     @app.post('/api/refresh')
     @require_user
@@ -439,9 +693,11 @@ def create_app(data_dir=None, testing=False):
     def export_data():
         with database() as db:
             rows = [dict(r) for r in db.execute('SELECT month,data FROM items WHERE user_id=?', (g.user['id'],))]
+            purchases=[json.loads(r['data']) for r in db.execute('SELECT data FROM purchases WHERE user_id=?',(g.user['id'],))]
+            trips=[json.loads(r['data']) for r in db.execute('SELECT data FROM trips WHERE user_id=?',(g.user['id'],))]
         response = jsonify(version=1, exported_at=utcnow(), profile=profile(g.user['id']),
             items=[dict(json.loads(r['data']), month=r['month']) for r in rows],
-            offers=[o for o in get_offers(g.user['id']) if o['source_kind'] == 'manual'])
+            offers=[o for o in get_offers(g.user['id']) if o['source_kind'] == 'manual'],purchases=purchases,trips=trips)
         response.headers['Content-Disposition'] = 'attachment; filename="despensa.json"'
         return response
 
@@ -451,13 +707,13 @@ def create_app(data_dir=None, testing=False):
 REFRESH_LOCK = threading.Lock()
 
 
-def enqueue_refresh(app):
+def enqueue_refresh(app, internal=False):
     with REFRESH_LOCK, app.database() as db:
         running = db.execute("SELECT id FROM jobs WHERE status IN ('queued','running') LIMIT 1").fetchone()
         if running:
             return running['id']
         last = db.execute('SELECT created FROM jobs ORDER BY created DESC LIMIT 1').fetchone()
-        if last and (datetime.now(timezone.utc) - datetime.fromisoformat(last['created'])).total_seconds() < 900:
+        if not internal and last and (datetime.now(timezone.utc) - datetime.fromisoformat(last['created'])).total_seconds() < 900:
             raise ValueError('O catálogo foi atualizado há pouco. Aguarde 15 minutos entre recolhas.')
         jid = uuid.uuid4().hex
         db.execute('INSERT INTO jobs VALUES(?,?,?,?,?)', (jid, 'queued', utcnow(), None, json.dumps({'sources': []})))
@@ -465,32 +721,20 @@ def enqueue_refresh(app):
 
 
 def run_job(app, job):
-    from catalog import CATEGORY_SOURCES, fetch_category
+    from research import run_research
     reports = []
     with app.database() as db:
         db.execute("UPDATE jobs SET status='running' WHERE id=?", (job['id'],))
-    for source in CATEGORY_SOURCES:
-        try:
-            products = fetch_category(source)
-            observed = utcnow()
-            with app.database() as db:
-                for o in products:
-                    o['observed_at'] = observed
-                    db.execute('INSERT OR REPLACE INTO offers VALUES(?,?,?,?)', (o['id'], '', o['store'], json.dumps(o)))
-                    db.execute('INSERT OR REPLACE INTO history VALUES(?,?,?)', (o['id'], observed, o['price_cents']))
-            reports.append(dict(store=source['store'], category=source['name'], count=len(products), ok=True))
-        except Exception as e:
-            logging.warning('Source %s: %s', source['name'], type(e).__name__)
-            reports.append(dict(store=source['store'], category=source['name'], count=0, ok=False,
-                error='A fonte não respondeu ou não permitiu a recolha. Últimos dados preservados.'))
+    def report(state):
+        reports[:] = [r for r in reports if r['store'] != state['store']]
+        reports.append(dict(state, category='Pesquisa automática', ok=state['status'] in ('ok','partial')))
         with app.database() as db:
             db.execute('UPDATE jobs SET data=? WHERE id=?', (json.dumps({'sources': reports}), job['id']))
-        time.sleep(2)
+    run_research(app, report)
     ok = sum(r['ok'] for r in reports)
     with app.database() as db:
         db.execute('UPDATE jobs SET status=?,finished=? WHERE id=?', ('done' if ok == len(reports) else 'partial' if ok else 'failed', utcnow(), job['id']))
         db.execute('INSERT OR REPLACE INTO meta VALUES(?,?)', ('last_refresh', json.dumps(utcnow())))
-
 
 def worker(app, stop=None):
     stop = stop or threading.Event()
@@ -500,12 +744,18 @@ def worker(app, stop=None):
                 job = db.execute("SELECT * FROM jobs WHERE status='queued' ORDER BY created LIMIT 1").fetchone()
                 profiles = [json.loads(r['data']) for r in db.execute('SELECT data FROM profiles')]
                 last = db.execute('SELECT created FROM jobs ORDER BY created DESC LIMIT 1').fetchone()
+                requested = db.execute('SELECT MAX(requested) FROM research_queries').fetchone()[0] or 0
+                sources = [json.loads(r[0]) for r in db.execute('SELECT data FROM research_sources')]
             if job:
                 run_job(app, job)
             else:
                 active = [p['interval_hours'] for p in profiles if p.get('automatic')]
-                if active and (not last or (datetime.now(timezone.utc) - datetime.fromisoformat(last['created'])).total_seconds() >= min(active) * 3600):
-                    enqueue_refresh(app)
+                last_time = datetime.fromisoformat(last['created']).timestamp() if last else 0
+                due_retry = any(s.get('status') == 'unavailable' and s.get('retry_at',0) <= time.time() for s in sources)
+                due_discovery = any(s.get('remaining',0) and s.get('retry_at',0) <= time.time() for s in sources)
+                new_query = requested > last_time and time.time() - requested >= 3
+                if active and (new_query or due_retry or due_discovery or time.time() - last_time >= min(active) * 3600):
+                    enqueue_refresh(app, internal=True)
         except Exception:
             logging.exception('Worker error')
         stop.wait(15)
