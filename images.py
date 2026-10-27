@@ -9,7 +9,8 @@ _cache = {}
 _lock = threading.Lock()
 HOSTS = {'www.continente.pt','www.auchan.pt'}
 IMAGE_PATHS = {
-    'www.continente.pt': ('/dw/image/',), 'www.auchan.pt': ('/dw/image/',),
+    'www.continente.pt': ('/dw/image/',),
+    'www.auchan.pt': ('/dw/image/', '/on/demandware.static/-/Sites-auchan-pt-master-catalog/'),
     'static.pingodoce.pt': ('/dw/image/',), 'www.lidl.pt': ('/assets/',),
     'www.lidl.es': ('/assets/',), 'prd.an-pcm.com': ('/dam/products/',),
     's7g10.scene7.com': ('/is/image/aldinord/',),
