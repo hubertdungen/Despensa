@@ -14,7 +14,7 @@ import threading
 from collections import Counter
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
-from urllib.parse import unquote, urljoin, urlsplit
+from urllib.parse import unquote, urljoin, urlsplit, quote
 from urllib import robotparser
 from xml.etree import ElementTree as ET
 
@@ -22,7 +22,7 @@ import requests
 from bs4 import BeautifulSoup
 from catalog import STORE_MAP, CATEGORY_SOURCES, cents, fold, product_text, pack_size, parse_retailer
 
-AGENT = 'Despensa/0.3 (+https://github.com/hubertdungen/Despensa; automatic grocery research)'
+AGENT = 'Despensa/0.4 (+https://github.com/hubertdungen/Despensa; automatic grocery research)'
 ROOTS = {
     'continente': 'https://www.continente.pt', 'auchan': 'https://www.auchan.pt',
     'pingo-doce': 'https://www.pingodoce.pt', 'lidl-pt': 'https://www.lidl.pt',
@@ -31,7 +31,7 @@ ROOTS = {
     'recheio': 'https://www.recheio.pt', 'mercadona-es': 'https://tienda.mercadona.es',
     'carrefour': 'https://www.carrefour.es', 'dia': 'https://www.dia.es',
     'eroski': 'https://supermercado.eroski.es', 'alcampo': 'https://www.compraonline.alcampo.es',
-    'lidl-es': 'https://www.lidl.es', 'makro-es': 'https://www.makro.es',
+    'lidl-es': 'https://www.lidl.es', 'makro-es': 'https://tienda.makro.es',
     'aldi-es': 'https://www.aldi.es',
 }
 SEEDS = {
@@ -66,6 +66,24 @@ def setup(db):
     db.executescript(SCHEMA)
 
 
+def upgrade_adapters(db):
+    """Revisit pages missed by old parsers once, without resetting access blocks."""
+    revision=db.execute("SELECT value FROM meta WHERE key='research_adapter_revision'").fetchone()
+    if revision and json.loads(revision[0])>=5:
+        return
+    for store in ('continente','auchan','lidl-pt','lidl-es','aldi-pt','aldi-es','makro-es'):
+        row=db.execute('SELECT data FROM research_sources WHERE store=?',(store,)).fetchone()
+        source=json.loads(row[0]) if row else {}
+        if store!='makro-es' and any(e in ('access_restricted','robots_restricted') for e in source.get('errors',[])):
+            continue
+        if row:
+            source.update(retry_at=0,failures=0,status='discovering',errors=[])
+            db.execute('UPDATE research_sources SET data=? WHERE store=?',(json.dumps(source),store))
+        db.execute('UPDATE research_urls SET next_check=0 WHERE store=?',(store,))
+        db.execute("UPDATE research_tasks SET status='queued',next_check=0,found=0,error='' WHERE store=? AND requested>?",(store,time.time()-86400))
+    db.execute("INSERT OR REPLACE INTO meta VALUES('research_adapter_revision','5')")
+
+
 def request_query(db, query, stores=None, force=False, owner=None):
     query = fold(query)[:120]
     if len(query) < 3:
@@ -83,7 +101,9 @@ def request_query(db, query, stores=None, force=False, owner=None):
             continue
         if owner:
             db.execute('INSERT OR IGNORE INTO research_watchers VALUES(?,?,?)',(owner,query,store))
-        task=db.execute('SELECT status,updated FROM research_tasks WHERE query=? AND store=?',(query,store)).fetchone()
+        task=db.execute('SELECT status,updated,requested FROM research_tasks WHERE query=? AND store=?',(query,store)).fetchone()
+        if task and task[0]=='queued' and now-task[2]>30:
+            db.execute("UPDATE research_tasks SET requested=? WHERE query=? AND store=?",(now,query,store))
         if task and (task[0] in ('queued','running') or now-task[1]<(60 if force else 900)):
             continue
         db.execute("INSERT OR REPLACE INTO research_tasks(query,store,requested) VALUES(?,?,?)",(query,store,now))
@@ -94,7 +114,9 @@ def request_query(db, query, stores=None, force=False, owner=None):
 def variants(query):
     pairs = [('leite','leche'), ('azeite','aceite'), ('ovos','huevos'), ('frango','pollo'),
              ('cafe','cafe'), ('manteiga','mantequilla'), ('queijo','queso'), ('atum','atun'),
-             ('acucar','azucar'), ('massa','pasta'), ('batata','patata'), ('agua','agua')]
+             ('acucar','azucar'), ('massa','pasta'), ('batata','patata'), ('agua','agua'),
+             ('banana','platano'), ('maca','manzana'), ('morango','fresa'), ('laranja','naranja'),
+             ('porco','cerdo'), ('vaca','vacuno'), ('peru','pavo'), ('carne','carne')]
     result = set(fold(query).split())
     for pt, es in pairs:
         if pt in result or es in result:
@@ -188,18 +210,32 @@ def walk(value):
 
 def base_offer(store, oid, name, price, pack, url, image='', brand='', **extra):
     amount, unit = pack_size(pack)
-    return dict(id=f'{store}:{oid}', store=store, country=STORE_MAP[store]['country'], name=name[:240],
+    result=dict(id=f'{store}:{oid}', store=store, country=STORE_MAP[store]['country'], name=name[:240],
         brand=brand, pack=f'{amount:g} {unit}' if amount else pack[:160], size=amount, unit=unit, price_cents=cents(price),
-        condition='public', coupon='', balance_cents=0, source_url=url, image_url=image,
+        condition='professional' if STORE_MAP[store]['professional'] else 'public', coupon='', balance_cents=0, source_url=url, image_url=image,
         channel='online', location='Preço publicado · disponibilidade local por confirmar',
-        valid_from='', valid_to='', source_kind='automatic', vat_included=True,
-        conditions_note='Preço publicado pela loja; confirmar disponibilidade e condições locais', **extra)
+        valid_from='', valid_to='', source_kind='automatic', vat_included=not STORE_MAP[store]['professional'],
+        conditions_note='Preço publicado pela loja; confirmar disponibilidade e condições locais')
+    result.update(extra)
+    return result
 
 
 def parse_page(html, store, url):
     """Independent parsers can rescue the same page when one representation changes."""
+    from retailer_data import lidl_records,makro_records
+    if store=='makro-es' and html.lstrip().startswith(b'{' if isinstance(html,bytes) else '{'):
+        rows=makro_records(json.loads(html),store,url,base_offer)
+        return rows,['public_catalogue_api'] if rows else []
     soup = BeautifulSoup(html, 'html.parser')
     found, methods = {}, []
+    if store.startswith('lidl-'):
+        try:
+            rows=lidl_records(soup,store,url,base_offer)
+            found.update((o['id'],o) for o in rows)
+            if rows:
+                methods.append('embedded_catalogue')
+        except (ValueError,TypeError,KeyError,AttributeError,RecursionError):
+            pass
     if store in ('continente', 'auchan'):
         try:
             rows = parse_retailer(html, store)
@@ -234,8 +270,9 @@ def parse_page(html, store, url):
         script = soup.select_one('#__NEXT_DATA__')
         if script:
             try:
-                data = json.loads(script.get_text())['props']['pageProps']['apiData']
-                data = json.loads(data) if isinstance(data, str) else data
+                props=json.loads(script.get_text())['props']['pageProps']
+                data=props.get('apiData',[])
+                data=[json.loads(data) if isinstance(data,str) else data,props.get('algoliaState',{})]
                 for product in walk(data):
                     if not all(k in product for k in ('objectID', 'name', 'currentPrice')):
                         continue
@@ -251,6 +288,8 @@ def parse_page(html, store, url):
                             o[field] = datetime.fromtimestamp(current[key], zone).date().isoformat()
                     o['available'] = bool(product.get('isAvailable', True))
                     o['channel'] = 'store'
+                    if re.match(r'^kg\s*[-–]',product.get('salesUnit',''),re.I):
+                        o.update(variable_weight=True,size=1,unit='kg',pack='1 kg · venda a peso')
                     found[o['id']] = o
                     methods.append('embedded_catalogue')
             except (ValueError, KeyError, TypeError, OverflowError):
@@ -312,7 +351,10 @@ def parse_page(html, store, url):
                 conditional = fold(detail.select_one('.prices').get_text(' ',strip=True)+' '+badges)
                 if any(s in conditional for s in ('cartao','poupa mais','cupao')):
                     o['condition'] = 'unknown'
-            found.setdefault(o['id'], o)
+            # A missing public price with a Lidl Plus-only embedded offer must
+            # never be reconstructed from a generic structured-data fallback.
+            if not (store.startswith('lidl-') and o['id']+':card' in found and o['id'] not in found):
+                found.setdefault(o['id'], o)
             methods.append('product_jsonld' if not detail else 'product_jsonld_displayed_price')
     # Standard product microdata is independent of the JSON-LD representation.
     for product in soup.select('[itemtype$="/Product"]'):
@@ -345,8 +387,14 @@ def discover_urls(content, url, store):
         index = tree.tag.endswith('sitemapindex')
         for element in tree:
             loc = next((e.text for e in element if e.tag.endswith('loc')), None)
+            if loc and store=='makro-es' and loc.startswith('https://distribucion-hosteleria.makro.es/'):
+                loc=loc.replace('https://distribucion-hosteleria.makro.es/','https://tienda.makro.es/',1)
             if loc and public_url(loc,root):
                 result.append((loc,'sitemap' if index else 'product'))
+        if store=='makro-es' and index:
+            # The official index separates categories (part 1) and products
+            # (part 2); spend the bounded discovery budget on product prices.
+            result.sort(key=lambda entry:'/part/2' not in entry[0])
         return result[:60000]
     except ET.ParseError:
         pass
@@ -359,6 +407,18 @@ def discover_urls(content, url, store):
         if any(k in path for k in ('/produto/','/produtos/','/producto/','/producto-','/produto-','/product/','/p/')):
             result.append((target,'product'))
     return list(dict.fromkeys(result))[:400]
+
+
+def read_product(url,store,rules):
+    """The official Makro SPA exposes the same anonymous data as its web shop."""
+    if store=='makro-es':
+        match=re.search(r'/shop/pv/(BTY-[A-Z]\d+)/(\d+)/(\d+)/',url)
+        if match:
+            target=ROOTS[store]+'/evaluate.article.v1/betty-variants?storeIds=00001&ids='+match[1]+match[2]+'&country=ES&locale=es-ES'
+            if not rules.can_fetch('Despensa',target):
+                raise ValueError('robots_restricted')
+            return read(target)
+    return read(url)
 
 
 def run_research(app, report, queries=None, per_store=12, stores=None):
@@ -406,9 +466,9 @@ def run_research(app, report, queries=None, per_store=12, stores=None):
             with app.database() as db:
                 for url in seeds:
                     if public_url(url,root):
-                        kind='sitemap' if '.xml' in url else 'category'
+                        kind='sitemap' if '.xml' in url or '/sitemap' in url else 'category'
                         db.execute('INSERT OR IGNORE INTO research_urls(store,url,kind) VALUES(?,?,?)',(store,url,kind))
-                pending=[dict(r) for r in db.execute('SELECT * FROM research_urls WHERE store=? AND next_check<=? LIMIT 200000',(store,now))]
+                pending=[dict(r) for r in db.execute('SELECT * FROM research_urls WHERE store=? AND next_check<=? LIMIT 200000',(store,now)) if public_url(r['url'],root)]
             if not pending:
                 with app.database() as db:
                     next_due=db.execute('SELECT MIN(next_check) FROM research_urls WHERE store=?',(store,)).fetchone()[0]
@@ -438,7 +498,7 @@ def run_research(app, report, queries=None, per_store=12, stores=None):
                 try:
                     if not rules.can_fetch('Despensa',url):
                         raise ValueError('robots_restricted')
-                    content=read(url,32_000_000 if entry['kind']=='sitemap' else 8_000_000)
+                    content=read(url,32_000_000) if entry['kind']=='sitemap' else read_product(url,store,rules)
                     pages_read+=1
                     new_urls=discover_urls(content,url,store)
                     offers,methods=([],['official_sitemap']) if entry['kind']=='sitemap' else parse_page(content,store,url)
@@ -501,35 +561,53 @@ def query_progress(db, query, stores, owner):
 
 def search_store(app, task, page_limit=6):
     """Give an explicit search its own bounded work, independent of catalogue sweeps."""
-    from searching import rank, STOPWORDS
+    from searching import rank, STOPWORDS, discovery_query, intent_bonus
     store,query=task['store'],task['query']
     now=time.time()
     with app.database() as db:
         row=db.execute('SELECT data FROM research_sources WHERE store=?',(store,)).fetchone()
         source=json.loads(row[0]) if row else {}
-    if source.get('status')=='unavailable' and source.get('retry_at',0)>now and source.get('errors'):
+    if source.get('status')=='unavailable' and source.get('retry_at',0)>now and any(e in ('access_restricted','robots_restricted','authentication_required') for e in source.get('errors',[])):
         return dict(status='unavailable',found=0,error=source['errors'][0],next_check=source['retry_at'])
     try:
         root=ROOTS[store];rules=robots(root)
-        hints=sorted({part for w in variants(query) if len(w)>=3 and w not in STOPWORDS for part in (w[:3],w[-3:])})
+        discovery=discovery_query(query) or query
+        hints=sorted({part for w in variants(discovery) if len(w)>=3 and w not in STOPWORDS for part in (w[:3],w[-3:])})
         clause=' AND ('+' OR '.join('url LIKE ?' for _ in hints)+')' if hints else ''
         with app.database() as db:
             entries=[dict(r) for r in db.execute("SELECT * FROM research_urls WHERE store=? AND kind!='sitemap' AND next_check<=?"+clause,
                 (store,now,*('%'+w+'%' for w in hints)))]
         choices=[]
         for entry in entries:
-            label=unquote(urlsplit(entry['url']).path).replace('-',' ')
-            leaf=label.rsplit('/',1)[-1]
-            relevance=10*rank(query,leaf)+rank(query,label)
+            if not public_url(entry['url'],root):
+                continue
+            parts=unquote(urlsplit(entry['url']).path).strip('/').split('/')
+            # Auchan ends its product URLs with a numeric ID after the name.
+            leaf=parts[-2] if len(parts)>1 and re.fullmatch(r'\d+\.html',parts[-1]) else parts[-1]
+            leaf=re.sub(r'(?:-\d+)?\.html$','',leaf).replace('-',' ')
+            label=' '.join(parts).replace('-',' ')
+            relevance=10*rank(discovery,leaf)+rank(discovery,label)
             if relevance:
+                relevance+=intent_bonus(discovery,leaf,label)
                 choices.append((relevance,entry))
         if not choices:
             for entry in entries:
                 label=unquote(urlsplit(entry['url']).path).replace('-',' ')
-                relevance=rank(query,label,fuzzy=True)
+                relevance=rank(discovery,label,fuzzy=True)
                 if relevance:
                     choices.append((relevance,entry))
         choices.sort(key=lambda r:(-r[0],r[1]['checked']))
+        # The public Auchan search is robots-permitted and supplies current tiles,
+        # including products whose sitemap URL has no brand/format information.
+        # Other retailers' blocked search routes are never used as substitutes.
+        if store=='auchan':
+            url=root+'/pt/pesquisa?q='+quote(query)
+            if rules.can_fetch('Despensa',url):
+                with app.database() as db:
+                    db.execute('INSERT OR IGNORE INTO research_urls(store,url,kind) VALUES(?,?,?)',(store,url,'search'))
+                    entry=dict(db.execute('SELECT * FROM research_urls WHERE store=? AND url=?',(store,url)).fetchone())
+                if entry['next_check']<=now:
+                    choices.insert(0,(10000,entry))
         if not choices:
             # Discovery may still be running for a new installation or retailer.
             waiting=not source.get('indexed') and now-task['requested']<1800
@@ -542,7 +620,7 @@ def search_store(app, task, page_limit=6):
                 errors.append('robots_restricted')
                 continue
             try:
-                content=read(url)
+                content=read_product(url,store,rules)
                 offers,used=parse_page(content,store,url)
                 methods.update(used)
                 observed=datetime.now(timezone.utc).isoformat()
@@ -570,10 +648,27 @@ def search_store(app, task, page_limit=6):
                     checked_at=datetime.now(timezone.utc).isoformat(),methods=sorted(set(source.get('methods',[]))|methods),
                     catalogue_count=db.execute("SELECT COUNT(*) FROM offers WHERE store=? AND user_id=''",(store,)).fetchone()[0])
                 db.execute('INSERT OR REPLACE INTO research_sources VALUES(?,?)',(store,json.dumps(source)))
+        if store=='recheio' and not found and not errors:
+            # The official public catalogue explicitly requires an authenticated
+            # Recheio account to reveal prices. Authelia is not a retailer session.
+            with app.database() as db:
+                source.update(store=store,status='unavailable',errors=['authentication_required'],retry_at=time.time()+21600)
+                db.execute('INSERT OR REPLACE INTO research_sources VALUES(?,?)',(store,json.dumps(source)))
+            return dict(status='unavailable',found=0,error='authentication_required',next_check=source['retry_at'])
+        if 'access_restricted' in errors and not found:
+            with app.database() as db:
+                source.update(store=store,status='unavailable',errors=errors,retry_at=time.time()+900)
+                db.execute('INSERT OR REPLACE INTO research_sources VALUES(?,?)',(store,json.dumps(source)))
         return dict(status='partial' if found and errors else 'done' if found or not errors else 'unavailable',
                     found=found,error=errors[0] if errors else '',next_check=time.time()+900 if errors else 0)
-    except Exception:
-        return dict(status='unavailable',found=0,error='source_unavailable',next_check=time.time()+900)
+    except Exception as error:
+        blocked=isinstance(error,requests.HTTPError) and error.response.status_code in (401,403,429)
+        kind='access_restricted' if blocked else 'source_unavailable'
+        if blocked:
+            with app.database() as db:
+                source.update(store=store,status='unavailable',errors=[kind],retry_at=time.time()+900)
+                db.execute('INSERT OR REPLACE INTO research_sources VALUES(?,?)',(store,json.dumps(source)))
+        return dict(status='unavailable',found=0,error=kind,next_check=time.time()+900)
 
 
 def priority_worker(app, stop=None):

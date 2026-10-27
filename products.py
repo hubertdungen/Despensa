@@ -23,7 +23,20 @@ def family(offer):
         if words & tokens:
             extra.append(variant)
     key = label = query = None
-    if 'leite' in words and unit == 'l' and not words & {'po', 'condensado', 'infantil', 'crescimento', 'lactentes', 'chocolate', 'creme'}:
+    first=text.strip().split()[0] if words else ''
+    if unit=='kg' and first in ('banana','bananas') and not words & {'desidratada','desidratadas','seca','secas','congelada','congeladas','chips','pure','pao','pan','frita','fritas'}:
+        origin='madeira' if 'madeira' in words else 'canarias' if 'canarias' in words else 'comum'
+        special=next((w for w in ('rosa','vermelha','prata','ouro','maca') if w in words),None)
+        if special:
+            origin=special
+        key,label,query='fruit:banana:'+origin,'Banana'+(' da Madeira' if origin=='madeira' else ' das Canárias' if origin=='canarias' else ''),'banana'
+        if special:
+            label+=' '+special
+    elif unit=='l' and first=='agua' and not words & {'sabores','sabor','fruta','limao','vermelhos','melancia','vitaminas','tonica','coco'}:
+        kind='com gas' if ' com gas ' in text or ' con gas ' in text else 'sem gas' if any(x in text for x in (' sem gas ',' sin gas ',' mineral ',' nascente ')) else None
+        if kind:
+            key,label,query='water:'+kind,'Água '+kind,'agua '+kind
+    elif 'leite' in words and unit == 'l' and not words & {'po', 'condensado', 'infantil', 'crescimento', 'lactentes', 'chocolate', 'creme'}:
         fat = 'meio gordo' if ' meio gordo ' in text or ' semidesnatada ' in text else 'magro' if 'magro' in words else 'gordo' if 'gordo' in words else None
         if fat:
             kind = 'fresco' if words & {'fresco', 'pasteurizado', 'refrigerado'} else 'uht'

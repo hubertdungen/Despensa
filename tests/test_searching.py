@@ -82,9 +82,41 @@ def test_search_priority_bypasses_catalogue_cooldown_and_fetches_only_matching_p
             db.execute('INSERT INTO research_urls(store,url,kind) VALUES(?,?,?)',('auchan',f'https://www.auchan.pt/pt/{name}.html','product'))
         db.execute('INSERT INTO research_sources VALUES(?,?)',('auchan',json.dumps(dict(status='ok',retry_at=time.time()+86400,indexed=2))))
     result=research.search_store(app,dict(store='auchan',query='detergentes',requested=time.time()))
-    assert result['found']==1 and result['status']=='done'
-    assert fetched==['https://www.auchan.pt/pt/detergente.html']
+    assert result['found']>=1 and result['status']=='done'
+    assert 'https://www.auchan.pt/pt/detergente.html' in fetched
+    assert not any('leite.html' in url for url in fetched)
     with app.database() as db:assert db.execute('SELECT COUNT(*) FROM offers').fetchone()[0]==1
+
+
+def test_product_format_is_optional_in_frontier_but_required_in_final_results(tmp_path,monkeypatch):
+    app,_=client(tmp_path)
+    rules=robotparser.RobotFileParser();rules.parse(['User-agent: *','Allow: /'])
+    monkeypatch.setattr(research,'robots',lambda _:rules)
+    data={'@type':'Product','sku':'water','name':'Água sem gás Luso','description':'garrafão 7 L','offers':{'price':1.99}}
+    monkeypatch.setattr(research,'read',lambda *args:('<script type="application/ld+json">'+json.dumps(data)+'</script>').encode())
+    with app.database() as db:
+        db.execute('INSERT INTO research_urls(store,url,kind) VALUES(?,?,?)',
+            ('continente','https://www.continente.pt/produto/agua-sem-gas-luso-123.html','product'))
+    result=research.search_store(app,dict(query='agua luso 7l',store='continente',requested=time.time()))
+    assert result['found']==1
+    with app.database() as db:row=json.loads(db.execute('SELECT data FROM offers').fetchone()[0])
+    assert find([row],'agua luso 7l')[0] and not find([row],'agua luso 5l')[0]
+
+
+def test_direct_grocery_matches_precede_flavoured_products_and_books():
+    rows=[offer('flavour','Iogurte sabor banana'),offer('book','Diário de um Banana',category='Livros'),
+          offer('fresh','Banana Continente',size=1,unit='kg')]
+    assert find(rows,'banana')[0][0]['id']=='fresh'
+
+
+def test_transient_source_error_does_not_block_another_interactive_product(tmp_path,monkeypatch):
+    app,_=client(tmp_path)
+    rules=robotparser.RobotFileParser();rules.parse(['User-agent: *','Allow: /'])
+    monkeypatch.setattr(research,'robots',lambda _:rules)
+    with app.database() as db:
+        db.execute('INSERT INTO research_sources VALUES(?,?)',('lidl-pt',json.dumps(dict(status='unavailable',errors=['source_unavailable'],retry_at=time.time()+86400))))
+    result=research.search_store(app,dict(query='banana',store='lidl-pt',requested=time.time()-2000))
+    assert result['status']=='done' and result['error']=='no_candidates'
 
 
 def test_empty_pass_reschedules_without_spinning_or_discarding_prices(tmp_path,monkeypatch):

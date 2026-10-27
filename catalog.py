@@ -56,7 +56,9 @@ def product_text(value):
                    ('queso','queijo'),('mantequilla','manteiga'),('azucar','acucar'),
                    ('atun','atum'),('patatas','batatas'),('patata','batata'),
                    ('manzanas','macas'),('manzana','maca'),('yogur','iogurte'),
-                   ('yogures','iogurtes'),('harina','farinha'),('espaguetis','esparguete')]:
+                   ('yogures','iogurtes'),('harina','farinha'),('espaguetis','esparguete'),
+                   ('platanos','bananas'),('platano','banana'),('fresas','morangos'),('fresa','morango'),
+                   ('naranjas','laranjas'),('naranja','laranja'),('cerdo','porco'),('vacuno','vaca'),('pavo','peru')]:
         text = text.replace(' ' + es + ' ', ' ' + pt + ' ')
     return text.strip()
 
@@ -86,7 +88,7 @@ def pack_size(text):
 def get(url, params=None):
     # One catalogue page per query, no retries on blocks, no login/cookie harvesting.
     response = requests.get(url, params=params, timeout=(8, 22), headers={
-        'User-Agent': 'Despensa/0.3 (+https://github.com/hubertdungen/Despensa; personal grocery planner)',
+        'User-Agent': 'Despensa/0.4 (+https://github.com/hubertdungen/Despensa; personal grocery planner)',
         'Accept-Language': 'pt-PT,es;q=0.8',
     })
     response.raise_for_status()
@@ -107,13 +109,24 @@ def parse_retailer(html, store):
                 continue
             price_node = tile.select_one('.pwc-tile--price-primary') if store == 'continente' else tile.select_one('.sales .value[content]')
             # The displayed sale price takes precedence over analytics metadata.
-            price = cents(price_node.get('content') or price_node.get_text('', strip=True)) if price_node else cents(meta['price'])
+            displayed = price_node.get('content') or price_node.get_text('', strip=True) if price_node else str(meta['price'])
+            # Fresh fruit and meat display €/kg, not a package price. Passing that
+            # string to cents used to discard every such tile as an invalid price.
+            weight_marker=price_node.select_one('.auc-avgWeight') if price_node else None
+            weight_price = bool(re.search(r'€\s*/\s*kg\b', displayed, re.I) or
+                weight_marker and re.search(r'/\s*kg\b',weight_marker.get_text('',strip=True),re.I))
+            price = cents(re.sub(r'€\s*/\s*kg\b', '', displayed, flags=re.I)) if weight_price else cents(displayed)
             link = tile.select_one('a[href*="/produto/"]') if store == 'continente' else tile.select_one('.pdp-link a')
             if not link:
                 continue
-            size_node = tile.select_one('.pwc-tile--quantity')
+            size_node = tile.select_one('.pwc-tile--quantity, .auc-measures--avg-weight')
             pack = size_node.get_text(' ', strip=True) if size_node else name
             amount, unit = pack_size(pack)
+            minimum = amount if 'minima' in fold(pack) else None
+            weight_step = amount if weight_price and 'emb' in fold(pack).split() else None
+            nominal_pack = pack
+            if weight_price:
+                amount, unit, pack = 1, 'kg', '1 kg · venda a peso'
             image_node = tile.select_one('img.ct-tile-image, img.tile-image')
             image_url = (image_node.get('data-src') or image_node.get('src') or '').strip() if image_node else ''
             text = fold(tile.get_text(' ', strip=True))
@@ -125,14 +138,19 @@ def parse_retailer(html, store):
                 source_url=urljoin('https://www.continente.pt' if store == 'continente' else 'https://www.auchan.pt', link['href']),
                 channel='online', location='Catálogo online · localização por confirmar', valid_from='', valid_to='',
                 source_kind='automatic', conditions_note='Ver condições na fonte' if conditional else 'Preço público observado; confirmar na loja',
-                vat_included=True, image_url=image_url))
+                vat_included=True, image_url=image_url, category=meta.get('category',''),
+                variable_weight=weight_price, minimum_quantity=minimum if weight_price else None,
+                weight_step=weight_step,
+                nominal_pack=nominal_pack if weight_price else ''))
         except (ValueError, KeyError, TypeError):
             continue
     return results
 
 
-# Deliberately bounded coverage: first public page of each category, no query scraping.
+# Bootstrap categories; the persistent sitemap frontier discovers the rest.
 CATEGORY_SOURCES = [
+    dict(store='continente', name='Banana', url='https://www.continente.pt/supermercado/frutas-e-legumes/frutas/banana/'),
+    dict(store='continente', name='Frango', url='https://www.continente.pt/supermercado/talho/frango/'),
     dict(store='continente', name='Arroz', url='https://www.continente.pt/supermercado/mercearia/arroz-massa-e-farinha/arroz/'),
     dict(store='continente', name='Massa', url='https://www.continente.pt/supermercado/mercearia/arroz-massa-e-farinha/massa/'),
     dict(store='continente', name='Leite', url='https://www.continente.pt/supermercado/laticinios-e-ovos/leites/'),

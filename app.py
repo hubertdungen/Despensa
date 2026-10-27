@@ -81,6 +81,8 @@ def create_app(data_dir=None, testing=False):
         from research import setup
         setup(db)
         db.execute('PRAGMA journal_mode=WAL')
+        from research import upgrade_adapters
+        upgrade_adapters(db)
         db.execute("UPDATE research_tasks SET status='queued' WHERE status='running'")
         # A process restart must not strand an interrupted refresh indefinitely.
         db.execute("UPDATE jobs SET status='interrupted',finished=? WHERE status='running'", (utcnow(),))
@@ -187,7 +189,7 @@ def create_app(data_dir=None, testing=False):
     def health():
         with database() as db:
             db.execute('SELECT 1')
-        return jsonify(ok=True, app='Despensa', version='0.3.0')
+        return jsonify(ok=True, app='Despensa', version='0.4.0')
 
     login_attempts = {}
     login_lock = threading.Lock()
@@ -635,8 +637,9 @@ def create_app(data_dir=None, testing=False):
             p=profile(g.user['id'])
             ref=p.get('reference_store','')
             candidates=[] if d.get('offline') or day!=date.today().isoformat() else [o for o in get_offers(g.user['id']) if o['store']==ref and eligible(o,p,day) and match(item_for_comparison,o)]
-            benchmark=min(candidates,key=lambda o:math.ceil(round(quantity/o['size'],9))*o['price_cents']) if candidates else None
-            reference_cents=math.ceil(round(quantity/benchmark['size'],9))*benchmark['price_cents'] if benchmark else None
+            from planner import purchase_cost
+            benchmark=min(candidates,key=lambda o:purchase_cost(o,quantity)[1]) if candidates else None
+            reference_cents=purchase_cost(benchmark,quantity)[1] if benchmark else None
             reference_kind='catalog' if benchmark else None
             manual_reference=d.get('reference_price')
             if manual_reference not in ('',None):

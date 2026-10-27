@@ -7,7 +7,7 @@
 
 Despensa é uma aplicação de compras pessoais que pode alojar no seu computador ou NAS. Organiza listas mensais, guarda as suas preferências e compara os produtos para os quais existem preços observados. A interface funciona em português europeu e espanhol, no computador e no telemóvel.
 
-**Versão 0.3: pesquisa prioritária no radar automático ibérico.** A aplicação descobre páginas, combina vários métodos de leitura, guarda o progresso e repete fontes que falham. O radar mostra a cobertura efetivamente conseguida em cada loja; uma fonte sem resposta nunca aparece como um preço encontrado.
+**Versão 0.4: fruta, carne fresca e pesquisa por marca/formato.** A aplicação descobre páginas, combina vários métodos de leitura, guarda o progresso e repete fontes que falham. O radar mostra a cobertura efetivamente conseguida em cada loja; uma fonte sem resposta nunca aparece como um preço encontrado.
 
 ## O que já pode fazer
 
@@ -18,6 +18,9 @@ Despensa é uma aplicação de compras pessoais que pode alojar no seu computado
 - Consultar imagens, comparação por litro/kg/unidade, fonte, data e histórico. Os grupos são calculados antes da paginação, para uma loja não desaparecer da comparação por ter um preço mais alto.
 - A pesquisa tem uma fila prioritária e dois investigadores independentes da recolha geral. Os resultados e o progresso por loja atualizam-se sem recarregar a página.
 - Investigar lojas de Portugal e Espanha através de catálogos, JSON-LD, dados de produto embebidos, microdados e mapas oficiais do site. A fila persistente dá prioridade aos produtos pedidos, reparte as consultas pela lista e continua a descobrir o catálogo entre recolhas. O servidor trabalha com a app fechada; a atualização periódica é configurável entre 6 e 168 horas.
+- Pesquisar fruta e carne vendidas ao kg, incluindo quantidades inferiores a 1 kg e embalagens de peso aproximado.
+- Encontrar produtos por marca e formato mesmo quando o volume não aparece no endereço da página; o Auchan tem também pesquisa direta no catálogo público.
+- Distinguir preços públicos e Lidl Plus nos dados de catálogo; ler dados públicos da Makro ES com IVA e identificação do centro. Preços de um centro específico ficam fora do plano até ser possível confirmar a loja.
 - Registar preços de lojas físicas de Portugal e Espanha, incluindo Makro e Recheio, formato, IVA, localização, validade, cartão, subscrição ou cupão específico.
 - Definir lojas acessíveis, cartões e códigos de cupão. Subscrições aparecem apenas onde existe um programa identificado: EntregaZero é uma subscrição de entregas, sem assumir descontos nos produtos.
 - Comparar até três lojas por ida, comprando embalagens inteiras. Os cabazes incompletos são identificados e nunca vencem um completo por omitir produtos.

@@ -1,6 +1,6 @@
 # Fontes, cobertura e metodologia
 
-## Radar automático ibérico (0.3)
+## Radar automático ibérico (0.4)
 
 A investigação é automática para os produtos da lista e as palavras pesquisadas. A pesquisa considera nomes, marcas, formatos, plurais, prefixos e grafias próximas quando não há correspondência exata. Portugal/Espanha são selecionáveis na pesquisa. Os grupos completos são calculados antes de paginar, sem limitar a comparação aos primeiros 300 preços.
 
@@ -12,10 +12,12 @@ Uma passagem não equivale a recolher uma loja inteira. O orçamento inicial é 
 
 1. Leitura do preço apresentado nas páginas de categoria, quando existe um formato identificado (Continente, Auchan e Pingo Doce).
 2. JSON-LD `Product/Offer` publicado pela própria loja em páginas de produto.
-3. Dados de catálogo embebidos na página, incluindo o catálogo ALDI em Next.js: preço, formato, datas e disponibilidade.
+3. Dados de catálogo embebidos na página, incluindo ALDI em Next.js (produto e resultados de categoria) e Lidl em Nuxt: preço, formato, datas, disponibilidade e preços Lidl Plus separados. O leitor Nuxt interpreta apenas referências JSON; não executa scripts.
 4. Microdados de produto quando o JSON-LD falta ou não pode ser interpretado.
 5. Mapas oficiais do site e ligações públicas para descobrir outras páginas de produto/categoria. Este método descobre URLs; não transforma uma URL num preço.
-6. No Pingo Doce, JSON-LD para identificar o produto e o preço visível dentro do bloco desse produto. O valor do minicarrinho não é usado.
+6. Pesquisa pública direta do Auchan, sujeita a `robots.txt`. O Continente e o Pingo Doce restringem os respetivos endpoints de pesquisa; nesses casos usamos categorias e páginas de produto descobertas nos mapas. Marca e volume não precisam de estar no URL: o formato é verificado no produto, depois da leitura.
+7. Catálogo público anónimo da [Makro ES](https://tienda.makro.es/shop), com `grossPrice` explícito, sem inferir IVA a partir de preços líquidos nem aplicar descontos por volume. O centro de referência atual é Barajas (00001): o preço e a localização são mostrados, mas estes registos ficam fora do plano até existir confirmação da loja.
+8. No Pingo Doce, JSON-LD para identificar o produto e o preço visível dentro do bloco desse produto. O valor do minicarrinho não é usado.
 
 Os métodos de leitura são independentes. Um JSON inválido não impede os outros leitores; uma página de categoria alterada pode ser substituída por uma página de produto descoberta no mapa. Uma fonte totalmente inacessível não é apresentada como coberta.
 
@@ -23,7 +25,9 @@ O robot identifica-se, aplica pausas de pelo menos dois segundos por domínio, l
 
 ### Validação real e limites
 
-Na validação da versão 0.2 foram extraídos preços reais de **Continente, Auchan, Pingo Doce, Lidl PT, ALDI PT/ES, DIA e Lidl ES**, através de métodos diferentes. A resposta de uma fonte pode mudar entre tentativas. Algumas fontes devolveram HTTP 403, verificação de acesso, mapas sem preço ou páginas sem preço legível; essas tentativas ficam identificadas e são repetidas com espera. Mercadona PT/ES, Intermarché, Makro, Recheio, Carrefour, Alcampo e Eroski têm mecanismos de descoberta/investigação configurados, mas isso não constitui garantia de preços disponíveis.
+Na validação da versão 0.2 foram extraídos preços reais de **Continente, Auchan, Pingo Doce, Lidl PT, ALDI PT/ES, DIA e Lidl ES**, através de métodos diferentes. A resposta de uma fonte pode mudar entre tentativas. Algumas fontes devolveram HTTP 403, verificação de acesso, mapas sem preço ou páginas sem preço legível; essas tentativas ficam identificadas e são repetidas com espera. A validação 0.4 confirmou banana e frango no Continente, Água Luso 7L no Auchan, banana ALDI, banana Lidl com Lidl Plus e preços com IVA no catálogo público da Makro ES. A Makro PT devolveu HTTP 403; o Recheio mostrou explicitamente que é necessário iniciar sessão numa conta da própria loja para revelar preços. Authelia autentica a Despensa e não substitui essa conta.
+
+Mercadona PT/ES, Intermarché, Makro PT, Recheio, Carrefour, Alcampo e Eroski têm mecanismos de descoberta/investigação configurados, mas isso não constitui garantia de preços disponíveis.
 
 Não se promete o preço mais baixo de todo o mercado nem o catálogo integral de todas as lojas. Também não se transforma uma falha automática na obrigação de introduzir preços manualmente: o radar continua a investigar. O registo manual é uma opção adicional para preços observados fisicamente.
 
@@ -37,7 +41,7 @@ O repositório distribui software, não uma base de dados comercial das lojas. P
 
 As sugestões reconhecem famílias conservadoras. Leite magro, meio gordo, sem lactose, fresco e biológico são separados quando a informação está presente. Palavras frequentes são normalizadas entre português e espanhol. Famílias não reconhecidas podem ser agrupadas por EAN/GTIN com dígito de controlo válido, unidade e conteúdo da embalagem iguais. Sem essa informação ficam como referências individuais. Não há certificação de equivalência nutricional ou de qualidade entre marcas.
 
-Uma referência específica pode ser fixada. Uma lista genérica procura alternativas pelas palavras/família escolhidas. Para kg/l/un, o custo é `ceil(quantidade / conteúdo da embalagem) × preço da embalagem`: uma unidade mais barata não implica necessariamente um cabaz mais barato. O histórico guarda preços observados, sem inventar preços anteriores.
+Uma referência específica pode ser fixada. Uma lista genérica procura alternativas pelas palavras/família escolhidas. Nas embalagens fechadas de kg/l/un, o custo é `ceil(quantidade / conteúdo da embalagem) × preço da embalagem`: uma unidade mais barata não implica necessariamente um cabaz mais barato. Nas vendas a peso, €/kg é uma base de comparação e não o preço de uma embalagem. O custo estimado usa o peso pedido, respeitando o mínimo publicado e, quando a loja vende uma embalagem de peso aproximado, múltiplos desse peso nominal. O preço final depende da pesagem. O mesmo cálculo é usado no plano e na referência guardada com uma compra. O histórico guarda preços observados, sem inventar preços anteriores.
 
 Só entram no plano lojas/países ativos, acesso profissional satisfeito, IVA incluído, observações com até 72 h e validade compatível com a data. Para datas futuras é exigida validade explícita. Condições desconhecidas ficam fora da otimização. Cartão não equivale a cupão. EntregaZero é uma subscrição de entregas e não desbloqueia automaticamente descontos em produtos. Saldo futuro não reduz o pagamento de hoje. Promoções por combinações ou valor mínimo não são presumidas elegíveis.
 

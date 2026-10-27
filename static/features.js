@@ -21,6 +21,10 @@ const featureCopy = {
     methodEmbedded: "Catálogo estruturado",
     methodMap: "Mapa do site",
     methodMicro: "Página de produto",
+    methodApi: "Catálogo público da loja",
+    researchLogin: "A loja exige uma conta para revelar preços",
+    variableWeight: "Venda a peso · total estimado, confirmado na pesagem",
+    priceLocation: "Preço de um centro específico · confirme a sua loja",
     researchWait:
       "O radar procura este produto automaticamente. Os resultados aparecem quando as fontes responderem.",
     researchPending: "Pesquisa programada",
@@ -122,6 +126,10 @@ const featureCopy = {
     methodEmbedded: "Catálogo estructurado",
     methodMap: "Mapa del sitio",
     methodMicro: "Página de producto",
+    methodApi: "Catálogo público de la tienda",
+    researchLogin: "La tienda exige una cuenta para mostrar precios",
+    variableWeight: "Venta al peso · total estimado, confirmado al pesar",
+    priceLocation: "Precio de un centro concreto · confirme su tienda",
     researchWait:
       "El radar busca este producto automáticamente. Los resultados aparecen cuando respondan las fuentes.",
     researchPending: "Búsqueda programada",
@@ -221,7 +229,7 @@ document.addEventListener(
 );
 
 function comparisonRow(offer, bestId) {
-  return `<div class="comparison-row ${offer.eligible ? "" : "ineligible"}"><div class="comparison-description"><strong>${esc(storeName(offer.store))}</strong>${offer.id === bestId ? ` <span class="tag">${t("best")}</span>` : ""}<small>${esc(offer.name)}</small><small>${esc(offer.pack)} · ${dateText(offer.observed_at)} · ${conditionLabel(offer.condition)}</small>${!offer.eligible ? `<small>${ft("unavailable")}</small>` : ""}</div><div class="comparison-price"><strong>${offer.unit_price_cents == null ? "—" : money(offer.unit_price_cents)}<small> / ${esc(offer.unit || "?")}</small></strong><small>${money(offer.price_cents)} / ${ft("pack").toLowerCase()}</small></div><div class="comparison-actions"><button type="button" class="quiet small" data-history="${esc(offer.id)}" aria-label="${t("history")}: ${esc(offer.name)}">${icon("clock")}</button><button type="button" class="primary small" data-offer="${esc(offer.id)}" aria-label="${t("useProduct")}: ${esc(offer.name)}">${icon("plus")}</button>${offer.source_url ? `<a href="${esc(offer.source_url)}" target="_blank" rel="noopener noreferrer">${t("source")} ↗</a>` : ""}</div></div>`;
+  return `<div class="comparison-row ${offer.eligible ? "" : "ineligible"}"><div class="comparison-description"><strong>${esc(storeName(offer.store))}</strong>${offer.id === bestId ? ` <span class="tag">${t("best")}</span>` : ""}<small>${esc(offer.name)}</small><small>${esc(offer.pack)} · ${dateText(offer.observed_at)} · ${conditionLabel(offer.condition)}</small>${offer.variable_weight ? `<small>${ft("variableWeight")}</small>` : ""}${offer.requires_location_confirmation ? `<small>${esc(offer.location)} · ${ft("priceLocation")}</small>` : ""}${!offer.eligible ? `<small>${ft("unavailable")}</small>` : ""}</div><div class="comparison-price"><strong>${offer.unit_price_cents == null ? "—" : money(offer.unit_price_cents)}<small> / ${esc(offer.unit || "?")}</small></strong><small>${money(offer.price_cents)} / ${offer.variable_weight ? esc(offer.unit) : ft("pack").toLowerCase()}</small></div><div class="comparison-actions"><button type="button" class="quiet small" data-history="${esc(offer.id)}" aria-label="${t("history")}: ${esc(offer.name)}">${icon("clock")}</button><button type="button" class="primary small" data-offer="${esc(offer.id)}" aria-label="${t("useProduct")}: ${esc(offer.name)}">${icon("plus")}</button>${offer.source_url ? `<a href="${esc(offer.source_url)}" target="_blank" rel="noopener noreferrer">${t("source")} ↗</a>` : ""}</div></div>`;
 }
 
 function renderComparisonProducts() {
@@ -650,6 +658,7 @@ function researchState(sid) {
 }
 function researchLabel(sid) {
   const s = researchState(sid);
+  if (s.errors?.includes("authentication_required")) return ft("researchLogin");
   if (
     !(s.count || s.catalogue_count) &&
     (s.errors?.includes("access_restricted") ||
@@ -684,6 +693,7 @@ function renderRadar(expanded = false) {
                   embedded_catalogue: "methodEmbedded",
                   official_sitemap: "methodMap",
                   product_microdata: "methodMicro",
+                  public_catalogue_api: "methodApi",
                 }[m] || "methodStructured",
               ),
             )

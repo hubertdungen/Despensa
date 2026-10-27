@@ -13,6 +13,7 @@ IMAGE_PATHS = {
     'static.pingodoce.pt': ('/dw/image/',), 'www.lidl.pt': ('/assets/',),
     'www.lidl.es': ('/assets/',), 'prd.an-pcm.com': ('/dam/products/',),
     's7g10.scene7.com': ('/is/image/aldinord/',),
+    'cdn.metro-group.com': ('/es/',),
 }
 
 
@@ -30,7 +31,7 @@ def thumbnail(offer):
         if parsed.scheme!='https' or parsed.hostname not in IMAGE_PATHS or parsed.port not in (None,443) or parsed.username or not parsed.path.startswith(IMAGE_PATHS.get(parsed.hostname, ())):
             return None
         with requests.get(url,timeout=(4,8),allow_redirects=False,stream=True,
-                headers={'User-Agent':'Despensa/0.3 (+https://github.com/hubertdungen/Despensa)'}) as response:
+                headers={'User-Agent':'Despensa/0.4 (+https://github.com/hubertdungen/Despensa)'}) as response:
             if response.status_code in (301,302,303,307,308):
                 from urllib.parse import urljoin
                 url=urljoin(url,response.headers.get('Location',''))

@@ -25,6 +25,15 @@ with tempfile.TemporaryDirectory(prefix='despensa-e2e-') as folder:
                     size=1,unit='un',price_cents=200+i,condition='public',vat_included=True,pack='1 un',
                     observed_at=datetime.now(timezone.utc).isoformat(),source_url='',source_kind='automatic')
                 db.execute('INSERT INTO offers VALUES(?,?,?,?)',(o['id'],'',o['store'],json.dumps(o)))
+            for sid,price,condition in [('continente',119,'public'),('aldi-pt',95,'public'),('lidl-pt',99,'card')]:
+                o=dict(id='banana:'+sid,store=sid,country='PT',name='Banana',size=1,unit='kg',
+                    price_cents=price,condition=condition,observed_at=datetime.now(timezone.utc).isoformat(),
+                    vat_included=True,pack='1 kg · venda a peso',variable_weight=True,source_url='',source_kind='automatic')
+                db.execute('INSERT INTO offers VALUES(?,?,?,?)',(o['id'],'',sid,json.dumps(o)))
+            o=dict(id='water:auchan',store='auchan',country='PT',name='ÁGUA MINERAL LUSO GARRAFÃO 7L',size=7,unit='l',
+                price_cents=199,condition='public',observed_at=datetime.now(timezone.utc).isoformat(),
+                vat_included=True,pack='7 l',source_url='',source_kind='automatic')
+            db.execute('INSERT INTO offers VALUES(?,?,?,?)',(o['id'],'',o['store'],json.dumps(o)))
     seed(local)
     secret=root/'proxy-secret';secret.write_text('browser-test-proxy-secret-'*3)
     os.environ.update(DESPENSA_AUTH_MODE='proxy',DESPENSA_PROXY_SECRET_FILE=str(secret),

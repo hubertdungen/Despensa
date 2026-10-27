@@ -14,7 +14,7 @@ docker compose up -d --build
 
 Abra `http://IP-DEL-SERVIDOR:8108` y cree una cuenta local, o configure entrada directa con Authelia. Los datos quedan en un volumen Docker. Para instalar en el teléfono y usar la lista sin conexión, necesita **HTTPS válido**. En Android/PC, use la instalación del navegador; en iPhone, **Compartir → Añadir a pantalla de inicio**. Los instaladores `.exe` y `.apk` todavía están pendientes.
 
-## Funciones actuales (0.3)
+## Funciones actuales (0.4)
 
 - Listas mensuales privadas, cantidades, notas, fechas y repetición del mes anterior. Modo de compra y cambios offline que se sincronizan con una sesión válida.
 - Investigación prioritaria al añadir o buscar productos, independiente de la recogida general. Busca también marcas, plurales, prefijos y pequeños errores de escritura; permite elegir Portugal/España y cargar más resultados. El progreso y los precios nuevos aparecen sin recargar la página.
@@ -28,11 +28,13 @@ Abra `http://IP-DEL-SERVIDOR:8108` y cree una cuenta local, o configure entrada 
 - Gastos y ahorro mensual a partir de compras registradas y una referencia guardada en la fecha de compra. Los costes adicionales de desplazamiento y los datos que faltan se muestran por separado.
 - Exportación de datos en JSON; todavía no hay importación/restauración desde la interfaz.
 
+La versión 0.4 corrige los precios por kg de fruta y carne fresca, busca marcas y formatos aunque no aparezcan en el URL, consulta la búsqueda pública de Auchan y separa los precios Lidl Plus. Los totales al peso son estimados y respetan los mínimos y pesos nominales publicados. El catálogo público de Makro ES aporta precios con IVA del centro Barajas; se muestran con su ubicación y no entran en el plan sin confirmar el centro.
+
 ## Cobertura y límites reales
 
 El motor tiene fuentes de investigación para Continente, Auchan, Pingo Doce, Lidl PT/ES, Aldi PT/ES, Intermarché, Mercadona PT/ES, Makro PT/ES, Recheio, Carrefour, DIA, Eroski y Alcampo. **No se exige registrar precios manualmente para utilizar España u otras cadenas.** El registro manual sigue disponible como opción para una observación física.
 
-Una fuente configurada no garantiza un catálogo completo. En la validación 0.2 se extrajeron precios reales de Continente, Auchan, Pingo Doce, Lidl Portugal, Aldi Portugal/España, DIA y Lidl España. Algunas otras fuentes devolvieron restricciones de acceso, páginas sin precios o solo mapas del catálogo. El radar conserva ese estado y programa nuevos intentos; no se inventan resultados. No se eluden autenticaciones ni CAPTCHAs.
+Una fuente configurada no garantiza un catálogo completo. En la validación 0.2 se extrajeron precios reales de Continente, Auchan, Pingo Doce, Lidl Portugal, Aldi Portugal/España, DIA y Lidl España. Algunas otras fuentes devolvieron restricciones de acceso, páginas sin precios o solo mapas del catálogo. El radar conserva ese estado y programa nuevos intentos; no se inventan resultados. Makro PT devolvió HTTP 403 y Recheio exige iniciar sesión en una cuenta de la propia tienda para mostrar precios. Authelia no sustituye esa cuenta. No se eluden autenticaciones ni CAPTCHAs.
 
 Los precios online pueden variar por región o tienda física. Las observaciones de más de 72 h quedan fuera del plan; para fechas futuras se exige vigencia explícita. Se compran envases enteros. Las familias no garantizan equivalencia de marcas, nutrición o calidad; leche desnatada, semidesnatada, sin lactosa, fresca y ecológica se separan cuando hay información suficiente. Las condiciones desconocidas se excluyen y el saldo futuro no reduce lo pagado hoy.
 

@@ -60,6 +60,7 @@ test('keyword suggestions compare milk across stores and quantity controls keep 
   await page.locator('#f-quantity').fill('2');
   await page.locator('#item-form button[type=submit]').click();
   await page.locator('.mobile-nav [data-view=explore]').click();
+  await page.locator('#catalog-search').fill('leite');
   await expect(page.locator('.comparison-card').first()).toContainText('2 lojas');
   await expect(page.locator('.comparison-row').first()).toContainText('Auchan');
   await expect(page.locator('.comparison-row').first()).toContainText('0,90');
@@ -121,5 +122,25 @@ test('radar searches brands, pages all results and updates while priority resear
   await page.locator('[data-cancel]').click();
   await page.locator('#catalog-country').selectOption('ES');
   await expect(page.locator('.comparison-card')).toHaveCount(0);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
+});
+
+test('fresh bananas compare per kg with card conditions and branded water matches 7L',async({page})=>{
+  await page.goto('/');await page.locator('#auth-toggle').click();
+  await page.locator('#username').fill('fresh-search-test');await page.locator('#password').fill('temporary-test-password-2026');
+  await page.locator('#auth-form button[type=submit]').click();await expect(page.locator('#quick-add')).toBeVisible();
+  await page.locator('.mobile-nav [data-view=explore]').click();
+  await page.locator('#catalog-search').fill('banana');
+  await expect(page.locator('.comparison-card')).toHaveCount(1);
+  await expect(page.locator('.comparison-row')).toHaveCount(3);
+  await expect(page.locator('.comparison-row').first()).toContainText('0,95');
+  await expect(page.locator('.comparison-row').first()).toContainText('/ kg');
+  await expect(page.locator('.comparison-row').first()).toContainText('Venda a peso');
+  await expect(page.locator('.comparison-row').filter({hasText:'Lidl'})).toContainText('cartão');
+  await page.locator('#catalog-search').fill('Agua Luso 7L');
+  await expect(page.locator('.comparison-card')).toHaveCount(1);
+  await expect(page.locator('.comparison-row')).toHaveCount(1);
+  await expect(page.locator('.comparison-row')).toContainText('7L');
+  await expect(page.locator('.comparison-price')).toContainText('1,99');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
 });

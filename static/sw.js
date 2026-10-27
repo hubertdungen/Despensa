@@ -1,4 +1,4 @@
-const CACHE = "despensa-shell-v3";
+const CACHE = "despensa-shell-v4";
 const SHELL = [
   "/",
   "/static/style.css",

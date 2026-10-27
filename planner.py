@@ -1,14 +1,32 @@
 """Explainable basket comparison. Costs are integer cents; quantities account for whole packs."""
 import itertools
 import math
+from decimal import Decimal, ROUND_HALF_UP
 from datetime import datetime, timezone
 from catalog import fold, product_text, STORE_MAP
+
+
+def purchase_cost(offer, quantity):
+    """Loose produce uses its requested weight; sealed packs remain indivisible."""
+    if offer.get('variable_weight'):
+        amount=max(float(quantity),offer.get('minimum_quantity') or 0)
+        if offer.get('weight_step'):
+            step=offer['weight_step']
+            amount=math.ceil(round(amount/step,9))*step
+        packs=round(amount/offer['size'],6)
+        cost=int((Decimal(str(packs))*offer['price_cents']).quantize(Decimal('1'),rounding=ROUND_HALF_UP))
+    else:
+        packs=math.ceil(round(quantity/offer['size'],9))
+        cost=packs*offer['price_cents']
+    return packs,cost
 
 
 def eligible(offer, prefs, day, now=None):
     now = now or datetime.now(timezone.utc)
     setting = prefs.get('stores', {}).get(offer['store'], {})
     if not setting.get('enabled') or offer['country'] not in prefs.get('countries', ['PT']) or offer.get('available') is False:
+        return False
+    if offer.get('requires_location_confirmation'):
         return False
     # Don't claim unannounced future prices or use stale observations.
     observed = datetime.fromisoformat(offer['observed_at'])
@@ -72,9 +90,10 @@ def make_plan(items, offers, prefs, day, now=None, road=None):
         candidates = []
         for o in offers:
             if eligible(o, prefs, day, now) and match(item, o):
-                packs = math.ceil(round(item['quantity'] / o['size'], 9))
+                packs,cost = purchase_cost(o,item['quantity'])
                 candidates.append(dict(item_id=item['id'], item_name=item['name'], offer=o,
-                    packs=packs, cost_cents=packs * o['price_cents'], balance_cents=packs * o.get('balance_cents', 0)))
+                    packs=packs, cost_cents=cost, estimated=bool(o.get('variable_weight')),
+                    balance_cents=round(packs * o.get('balance_cents', 0))))
         choices[item['id']] = sorted(candidates, key=lambda c: c['cost_cents'])
     missing = [i['name'] for i in pending if not choices[i['id']]]
     store_ids = sorted({c['offer']['store'] for options in choices.values() for c in options})

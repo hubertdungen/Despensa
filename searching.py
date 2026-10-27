@@ -5,6 +5,31 @@ from catalog import product_text
 STOPWORDS = {'de','da','do','das','dos','del','la','el','los','las','para','por','con','com','e','y','a','o'}
 
 
+def discovery_query(query):
+    """A format often exists only inside the page, never in its sitemap URL."""
+    text=re.sub(r'\b(?:\d+\s*[x×]\s*)?\d+(?:[.,]\d+)?\s*(?:kg|gr|g|ml|cl|lt|l|un|uds)\b', ' ',query,flags=re.I)
+    return ' '.join(w for w in tokens(text) if not w.isdigit())
+
+
+def intent_bonus(query, name, category=''):
+    """Put short, direct grocery matches before flavourings, recipes and pet food."""
+    if not query:
+        return 0
+    wanted=set(tokens(discovery_query(query)))
+    words=tokens(name)
+    bonus=max(0,20-len(words))
+    if wanted and words and words[0] in wanted:
+        bonus+=30
+    category_words=set(tokens(category))
+    if wanted & {'frango','porco','vaca','peru','carne'} and category_words & {'talho','carniceria','fresco'}:
+        bonus+=25
+    if wanted & {'banana','maca','pera','laranja','morango'} and category_words & {'fruta','frutas','legume','fresco'}:
+        bonus+=25
+    if any(x in (' '+product_text(category)+' ') for x in (' pet ', ' animal ', ' bebe ', ' livros ')):
+        bonus-=40
+    return bonus
+
+
 def tokens(text):
     text=product_text(re.sub(r'(\d)([a-zA-Z])',r'\1 \2',str(text)))
     result=[]
@@ -65,5 +90,6 @@ def find(offers, query):
         ranked=[(rank(query,o['name'],o.get('brand',''),o.get('pack',''),fuzzy=True),o) for o in offers]
         ranked=[(score,o) for score,o in ranked if score]
         corrected=bool(ranked)
-    ranked.sort(key=lambda row:(-row[0],row[1]['price_cents']/row[1]['size'] if row[1].get('size') else 1e12,row[1]['name']))
+    ranked.sort(key=lambda row:(-row[0]-intent_bonus(query,row[1]['name'],row[1].get('category','')),
+        row[1]['price_cents']/row[1]['size'] if row[1].get('size') else 1e12,row[1]['name']))
     return [o for _,o in ranked],corrected
