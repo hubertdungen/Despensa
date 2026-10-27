@@ -79,7 +79,7 @@ def rank(query, name, brand='', pack='', fuzzy=False):
             score+=2
         else:
             return 0
-    return score+(10 if product_text(query)==product_text(name) else 0)
+    return score+(60 if product_text(query)==product_text(name) else 0)
 
 
 def find(offers, query):

@@ -44,6 +44,18 @@ def test_fresh_produce_and_meat_prices_per_kg_are_not_discarded_or_mispriced():
     assert purchase_cost(row,.6)==(.6,71)
 
 
+def test_continente_product_page_does_not_erase_weight_basis_from_category():
+    data={'@type':'Product','sku':'2597619','name':'Banana Continente','offers':{'price':1.19,'priceCurrency':'EUR'}}
+    html='<script type="application/ld+json">'+json.dumps(data)+'</script>'
+    html+='''<div class="breadcrumb-item">Frutas e Legumes</div><section class="product-name-details--wrapper">
+        <h1>Banana Continente</h1><span class="ct-pdp--unit">Quant. Mínima = 600 gr (3 un)</span>
+        <span class="pwc-tile--price-primary">1 ,19€/kg</span></section>'''
+    rows,_=parse_page(html,'continente','https://www.continente.pt/produto/banana-2597619.html')
+    assert rows[0]['size']==1 and rows[0]['unit']=='kg' and rows[0]['variable_weight']
+    assert rows[0]['minimum_quantity']==.6 and rows[0]['price_cents']==119
+    assert purchase_cost(rows[0],.6)==(.6,71)
+
+
 def test_lidl_reads_card_price_dates_and_per_kg_without_fabricating_public_price():
     product=dict(itemId=42,keyfacts={'fullTitle':'Banana Rainforest Alliance'},eans=['4304493274099'],
         price={'currencyCode':'EUR'},regionsV2={'91':{'isDefault':True,'regionPriceId':'1'}},

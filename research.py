@@ -69,7 +69,7 @@ def setup(db):
 def upgrade_adapters(db):
     """Revisit pages missed by old parsers once, without resetting access blocks."""
     revision=db.execute("SELECT value FROM meta WHERE key='research_adapter_revision'").fetchone()
-    if revision and json.loads(revision[0])>=5:
+    if revision and json.loads(revision[0])>=6:
         return
     for store in ('continente','auchan','lidl-pt','lidl-es','aldi-pt','aldi-es','makro-es'):
         row=db.execute('SELECT data FROM research_sources WHERE store=?',(store,)).fetchone()
@@ -81,7 +81,7 @@ def upgrade_adapters(db):
             db.execute('UPDATE research_sources SET data=? WHERE store=?',(json.dumps(source),store))
         db.execute('UPDATE research_urls SET next_check=0 WHERE store=?',(store,))
         db.execute("UPDATE research_tasks SET status='queued',next_check=0,found=0,error='' WHERE store=? AND requested>?",(store,time.time()-86400))
-    db.execute("INSERT OR REPLACE INTO meta VALUES('research_adapter_revision','5')")
+    db.execute("INSERT OR REPLACE INTO meta VALUES('research_adapter_revision','6')")
 
 
 def request_query(db, query, stores=None, force=False, owner=None):
@@ -313,6 +313,10 @@ def parse_page(html, store, url):
             # Pingo Doce publishes the price in the product-specific displayed price
             # and analytics record; its Product JSON-LD deliberately has no offers.
             detail = soup.select_one('.product-detail[data-gtm-info]') if store == 'pingo-doce' else None
+            # Continente's JSON-LD omits the pack and €/kg basis. Read them from
+            # the matching main product, never from recommendation cards.
+            heading=soup.select_one('h1') if store=='continente' else None
+            continent_detail=soup.select_one('.product-name-details--wrapper') if heading and fold(heading.get_text(' ',strip=True))==fold(name) else None
             price_node = detail.select_one('.prices .price-container') if detail else None
             if not valid and price_node:
                 valid = [dict(price=price_node.get_text('', strip=True))]
@@ -320,6 +324,10 @@ def parse_page(html, store, url):
                 continue
             price = valid[0]
             pack = name + ' ' + str(product.get('description', ''))[:400]
+            if continent_detail:
+                unit_node=continent_detail.select_one('.ct-pdp--unit')
+                if unit_node:
+                    pack=unit_node.get_text(' ',strip=True)
             if detail:
                 # Contains the explicit pack label (e.g. 1 L), not the €/L price.
                 pack = detail.get_text(' ', strip=True).split('Adicionar', 1)[0]
@@ -336,6 +344,16 @@ def parse_page(html, store, url):
                 o = base_offer(store, oid, name, price['price'], pack, url, image, brand)
             except (ValueError, TypeError):
                 continue
+            if continent_detail:
+                primary=continent_detail.select_one('.pwc-tile--price-primary')
+                displayed=primary.get_text('',strip=True) if primary else ''
+                if re.search(r'€\s*/\s*kg\b',displayed,re.I):
+                    amount,_=pack_size(pack)
+                    o.update(price_cents=cents(re.sub(r'€\s*/\s*kg\b','',displayed,flags=re.I)),
+                        variable_weight=True,size=1,unit='kg',pack='1 kg · venda a peso',nominal_pack=pack,
+                        minimum_quantity=amount if 'minima' in fold(pack) else None,
+                        weight_step=amount if 'emb' in fold(pack).split() else None)
+                o['category']=' / '.join(e.get_text(' ',strip=True) for e in soup.select('.breadcrumb-item'))
             excluded=('Discontinued','SoldOut') if store.startswith('lidl-') else ('Discontinued','SoldOut','OutOfStock')
             o['available'] = not str(price.get('availability','')).endswith(excluded)
             # In-store retailers use OutOfStock for the unavailable online channel;
