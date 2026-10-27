@@ -632,6 +632,9 @@ function nav(mobile = false) {
     .join("")}</nav>`;
 }
 function render() {
+  const quickInput = $("#quick-add input");
+  const quickDraft = quickInput?.value || "";
+  const quickFocused = quickInput && document.activeElement === quickInput;
   document.documentElement.lang = locale;
   document.body.classList.toggle("shopping-mode", state.shopping);
   if (!state.user) {
@@ -644,6 +647,10 @@ function render() {
   $("#app").innerHTML =
     `<div class="shell"><aside class="sidebar"><a class="brand" href="/"><img src="/logo.svg" alt=""><div><strong>despensa<span>.</span></strong><span>${t("tagline")}</span></div></a>${nav()}<div class="side-note">${icon("leaf", "sprout")}<strong>${t("greeting")}</strong><p>${t("intro")}</p></div><div class="side-foot"><span class="dot"></span> Portugal & España <span>·</span> v0.5</div></aside><div class="workspace"><header class="topbar"><div class="breadcrumb">Despensa ${icon("chevron")}<b>${t(state.view)}</b></div><a class="mobile-brand" href="/"><img src="/logo.svg" alt="">despensa.</a><div class="top-actions"><span class="top-date">${new Date().toLocaleDateString(locale, { day: "numeric", month: "long" })}</span><button class="quiet small" data-action="refresh" title="${t("refresh")}" aria-label="${t("refresh")}" ${active ? "disabled" : ""}>${icon("refresh", active ? "spinner" : "")}<span class="refresh-label">${t(active ? "updating" : "refresh")}</span></button><button class="avatar" data-view="profile" title="${esc(state.user.username)}" aria-label="${t("profile")}">${esc(state.user.username.slice(0, 2).toUpperCase())}</button></div></header>${state.offline || readQueue().length ? `<div class="offline-banner" role="status">${state.offline ? t("offline") : `${readQueue().length} ${t("pending")}`}</div>` : ""}<main class="content" id="main">${{ list: renderList, explore: renderExplore, plan: renderPlan, profile: renderProfile }[state.view]()}</main></div></div>${nav(true)}`;
   bind();
+  if (quickDraft && $("#quick-add input")) {
+    $("#quick-add input").value = quickDraft;
+    if (quickFocused) $("#quick-add input").focus({preventScroll:true});
+  }
 }
 function renderAuth() {
   if (state.auth?.mode === "proxy") {
@@ -854,6 +861,7 @@ function itemModal(item = null, offer = null, quickName = "", group = null) {
       state.items = state.items.map((i) => (i.id === id ? { ...i, ...v } : i));
     } else state.items.push({ ...v, id });
     $("#modal").close();
+    $("#quick-add")?.reset();
     saveSnapshot();
     render();
     await queueMutation(

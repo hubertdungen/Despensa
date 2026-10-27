@@ -187,3 +187,16 @@ test('locating both origins persists them immediately without losing either loca
   await expect(page.locator('#f-home')).toHaveValue('Casa confirmada');
   await expect(page.locator('#f-work')).toHaveValue('Trabalho confirmado');
 });
+
+
+test('a background plan refresh preserves a product being typed in quick add',async({page})=>{
+  await page.goto('/');await page.locator('#auth-toggle').click();
+  await page.locator('#username').fill('draft-test');await page.locator('#password').fill('temporary-test-password-2026');
+  await page.locator('#auth-form button[type=submit]').click();await expect(page.locator('#quick-add')).toBeVisible();
+  await page.locator('#quick-add input').fill('Café Delta');
+  await page.evaluate(()=>loadPlan());
+  await expect(page.locator('#quick-add input')).toHaveValue('Café Delta');
+  await page.locator('#quick-add button').click();
+  await expect(page.locator('[data-suggestion]')).toHaveCount(2);
+  await page.locator('[data-cancel]').click();
+});
