@@ -1,5 +1,6 @@
 """Rank grocery searches by name, brand and format without changing product identity."""
 import re
+from functools import lru_cache
 from catalog import product_text
 
 STOPWORDS = {'de','da','do','das','dos','del','la','el','los','las','para','por','con','com','e','y','a','o'}
@@ -8,6 +9,8 @@ STOPWORDS = {'de','da','do','das','dos','del','la','el','los','las','para','por'
 def discovery_query(query):
     """A format often exists only inside the page, never in its sitemap URL."""
     text=re.sub(r'\b(?:\d+\s*[x×]\s*)?\d+(?:[.,]\d+)?\s*(?:kg|gr|g|ml|cl|lt|l|un|uds)\b', ' ',query,flags=re.I)
+    if 'cereal' in tokens(text):
+        text=re.sub(r'\blinha\s+(?:e\s+)?fibra\b',' ',product_text(text))
     return ' '.join(w for w in tokens(text) if not w.isdigit())
 
 
@@ -30,6 +33,7 @@ def intent_bonus(query, name, category=''):
     return bonus
 
 
+@lru_cache(maxsize=32768)
 def tokens(text):
     text=product_text(re.sub(r'(\d)([a-zA-Z])',r'\1 \2',str(text)))
     result=[]
@@ -45,7 +49,7 @@ def tokens(text):
         elif len(word)>3 and word.endswith('s'):
             word=word[:-1]
         result.append(word)
-    return result
+    return tuple(result)
 
 
 def one_edit(a,b):
@@ -62,17 +66,20 @@ def one_edit(a,b):
     return True
 
 
-def rank(query, name, brand='', pack='', fuzzy=False):
+def rank(query, name, brand='', pack='', fuzzy=False, category=''):
     wanted=tokens(query)
     if not wanted:
         return 1
     primary=tokens(name)
     brand_words=tokens(brand)
     words=set(primary+brand_words+tokens(pack))
+    category_words=set(tokens(category)) if 'cereal' in wanted and 'cereal' in primary else set()
     score=0
     for word in wanted:
         if word in words:
             score+=12 if word in primary else 10 if word in brand_words else 6
+        elif word in {'linha','fibra'} and word in category_words:
+            score+=3
         elif len(word)>=3 and any(w.startswith(word) for w in words):
             score+=5
         elif fuzzy and len(word)>=5 and any(one_edit(word,w) for w in words if len(w)>=4):
@@ -83,11 +90,16 @@ def rank(query, name, brand='', pack='', fuzzy=False):
 
 
 def find(offers, query):
-    ranked=[(rank(query,o['name'],o.get('brand',''),o.get('pack','')),o) for o in offers]
+    ranked=[(rank(query,o['name'],o.get('brand',''),o.get('pack',''),category=o.get('category','')),o) for o in offers]
     ranked=[(score,o) for score,o in ranked if score]
     corrected=False
     if query and not ranked:
-        ranked=[(rank(query,o['name'],o.get('brand',''),o.get('pack',''),fuzzy=True),o) for o in offers]
+        ranked=[(rank(query,o['name'],o.get('brand',''),o.get('pack',''),fuzzy=True,category=o.get('category','')),o) for o in offers]
+        ranked=[(score,o) for score,o in ranked if score]
+        corrected=bool(ranked)
+    if query and not ranked and 'cereal' in tokens(query) and re.search(r'\blinha\s+(?:e\s+)?fibra\b',product_text(query)):
+        related=re.sub(r'\blinha\s+(?:e\s+)?fibra\b',' ',product_text(query))
+        ranked=[(rank(related,o['name'],o.get('brand',''),o.get('pack','')),o) for o in offers]
         ranked=[(score,o) for score,o in ranked if score]
         corrected=bool(ranked)
     ranked.sort(key=lambda row:(-row[0]-intent_bonus(query,row[1]['name'],row[1].get('category','')),

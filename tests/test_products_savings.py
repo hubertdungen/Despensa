@@ -119,3 +119,16 @@ def test_images_never_fetch_arbitrary_urls(monkeypatch):
     monkeypatch.setattr(images.requests,'get',lambda *a,**k: (_ for _ in ()).throw(AssertionError('Network must not be used')))
     for url in ['http://127.0.0.1/private','https://www.auchan.pt.evil.test/dw/image/a.jpg','https://www.auchan.pt/private']:
         assert images.thumbnail(dict(source_kind='automatic',image_url=url)) is None
+
+
+def test_fruit_varieties_and_meat_cuts_remain_separate():
+    from products import family
+    def product(name,**extra):
+        return dict(id=name,name=name,size=1,unit='kg',**extra)
+    assert family(product('Maçã Gala'))['key']==family(product('Maçãs Gala'))['key']
+    assert family(product('Maçã Gala'))['key']!=family(product('Maçã Golden'))['key']
+    assert family(product('Peito de frango',category='Talho'))['key']==family(product('Peito de frango fresco'))['key']
+    assert family(product('Peito de frango fresco'))['key']!=family(product('Peito de frango congelado'))['key']
+    assert family(product('Bifes de porco'))['key']!=family(product('Bifes de peru'))['key']
+    assert family(product('Ração gato frango'))['key'].startswith('reference:')
+    assert family(dict(product('Leite meio gordo proteína'),unit='l'))['label'].endswith('proteína')

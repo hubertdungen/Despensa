@@ -82,6 +82,9 @@ def lidl_records(soup,store,url,make_offer):
 
 def makro_records(data,store,url,make_offer):
     """Anonymous Makro ES catalogue; explicitly use gross price at the named centre."""
+    country='PT' if store=='makro-pt' else 'ES'
+    root='https://produtos.makro.pt' if country=='PT' else 'https://tienda.makro.es'
+    centre_name='Makro Alfragide' if country=='PT' else 'Makro Barajas'
     rows=[]
     for article in data.get('result',{}).values():
         for variant in article.get('variants',{}).values():
@@ -112,13 +115,13 @@ def makro_records(data,store,url,make_offer):
                 if weight:
                     pack='1 kg'
                 path='/shop/pv/{articleNumber}/{variantNumber}/{bundleNumber}/'.format(**identity)+quote(name.replace(' ','-'))
-                source=urljoin('https://tienda.makro.es',path)
+                source=urljoin(root,path)
                 o=make_offer(store,oid,name,price['grossPrice'],pack,source,
                     bundle.get('imageUrlS',''),bundle.get('brandName',''))
                 o.update(condition='professional',vat_included=True,channel='store',variable_weight=weight,
                     available=fulfillment.get('availability')=='AVAILABLE' and not centre.get('delisted'),
-                    location='Makro Barajas · centro 00001',requires_location_confirmation=True,
-                    conditions_note='Preço com IVA do centro Makro Barajas (00001); requer acesso profissional e confirmação da loja',
+                    location=centre_name+' · centro 00001',requires_location_confirmation=True,
+                    conditions_note=f'Preço com IVA do centro {centre_name} (00001); requer acesso profissional e confirmação da loja',
                     category=' / '.join(c.get('name','') for c in bundle.get('categories',[])))
                 if weight:
                     # The source exposes the average sellable piece separately.

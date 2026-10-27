@@ -507,6 +507,8 @@ const state = {
   catalogHasMore: false,
   catalogTotal: 0,
   catalogApproximate: false,
+  catalogLoading: false,
+  catalogError: false,
   queryResearch: null,
   shopping: false,
   registering: false,
@@ -640,7 +642,7 @@ function render() {
     ["queued", "running"].includes(j.status),
   );
   $("#app").innerHTML =
-    `<div class="shell"><aside class="sidebar"><a class="brand" href="/"><img src="/logo.svg" alt=""><div><strong>despensa<span>.</span></strong><span>${t("tagline")}</span></div></a>${nav()}<div class="side-note">${icon("leaf", "sprout")}<strong>${t("greeting")}</strong><p>${t("intro")}</p></div><div class="side-foot"><span class="dot"></span> Portugal & España <span>·</span> v0.4</div></aside><div class="workspace"><header class="topbar"><div class="breadcrumb">Despensa ${icon("chevron")}<b>${t(state.view)}</b></div><a class="mobile-brand" href="/"><img src="/logo.svg" alt="">despensa.</a><div class="top-actions"><span class="top-date">${new Date().toLocaleDateString(locale, { day: "numeric", month: "long" })}</span><button class="quiet small" data-action="refresh" title="${t("refresh")}" aria-label="${t("refresh")}" ${active ? "disabled" : ""}>${icon("refresh", active ? "spinner" : "")}<span class="refresh-label">${t(active ? "updating" : "refresh")}</span></button><button class="avatar" data-view="profile" title="${esc(state.user.username)}" aria-label="${t("profile")}">${esc(state.user.username.slice(0, 2).toUpperCase())}</button></div></header>${state.offline || readQueue().length ? `<div class="offline-banner" role="status">${state.offline ? t("offline") : `${readQueue().length} ${t("pending")}`}</div>` : ""}<main class="content" id="main">${{ list: renderList, explore: renderExplore, plan: renderPlan, profile: renderProfile }[state.view]()}</main></div></div>${nav(true)}`;
+    `<div class="shell"><aside class="sidebar"><a class="brand" href="/"><img src="/logo.svg" alt=""><div><strong>despensa<span>.</span></strong><span>${t("tagline")}</span></div></a>${nav()}<div class="side-note">${icon("leaf", "sprout")}<strong>${t("greeting")}</strong><p>${t("intro")}</p></div><div class="side-foot"><span class="dot"></span> Portugal & España <span>·</span> v0.5</div></aside><div class="workspace"><header class="topbar"><div class="breadcrumb">Despensa ${icon("chevron")}<b>${t(state.view)}</b></div><a class="mobile-brand" href="/"><img src="/logo.svg" alt="">despensa.</a><div class="top-actions"><span class="top-date">${new Date().toLocaleDateString(locale, { day: "numeric", month: "long" })}</span><button class="quiet small" data-action="refresh" title="${t("refresh")}" aria-label="${t("refresh")}" ${active ? "disabled" : ""}>${icon("refresh", active ? "spinner" : "")}<span class="refresh-label">${t(active ? "updating" : "refresh")}</span></button><button class="avatar" data-view="profile" title="${esc(state.user.username)}" aria-label="${t("profile")}">${esc(state.user.username.slice(0, 2).toUpperCase())}</button></div></header>${state.offline || readQueue().length ? `<div class="offline-banner" role="status">${state.offline ? t("offline") : `${readQueue().length} ${t("pending")}`}</div>` : ""}<main class="content" id="main">${{ list: renderList, explore: renderExplore, plan: renderPlan, profile: renderProfile }[state.view]()}</main></div></div>${nav(true)}`;
   bind();
 }
 function renderAuth() {
@@ -778,7 +780,7 @@ function renderPlan() {
           .slice(0, 6)
           .map(
             (p, index) =>
-              `<article class="plan-card ${index === 0 ? "best" : ""}"><header><div>${index === 0 ? `<span class="tag">${t("best")}</span>` : ""}${!p.complete ? `<span class="tag amber">${t("partial")}</span>` : ""}<h3>${p.stores.map((s) => esc(storeName(s))).join(" + ")}</h3><span class="muted">${p.coverage} / ${p.total_items} ${t("coverageLabel")}</span></div><div class="plan-total">${money(p.total_cents)}<div class="muted total-note">${t(p.travel_cents === null ? "subtotal" : "total")}</div></div></header><div class="plan-metrics"><span>${t("basket")}: <b>${money(p.basket_cents)}</b></span><span>${icon("route")} ${p.extra_km === null ? t("unknownKm") : `${p.extra_km} km · ${money(p.travel_cents)} · ${t(p.distance_method === "road" ? "routeReal" : "distanceEstimate")}`}</span>${p.balance_cents ? `<span>${t("futureBalance")}: ${money(p.balance_cents)}</span>` : ""}</div><div class="plan-products">${p.selections.map((s) => `<div class="plan-product"><div>${esc(s.item_name)}<small>${esc(s.offer.name)} · ${s.packs} × ${esc(s.offer.pack)} · ${esc(storeName(s.offer.store))}</small></div><b>${money(s.cost_cents)}</b></div>`).join("")}</div>${routeItinerary(p)}</article>`,
+              `<article class="plan-card ${index === 0 ? "best" : ""}"><header><div>${index === 0 ? `<span class="tag">${t("best")}</span>` : ""}${!p.complete ? `<span class="tag amber">${t("partial")}</span>` : ""}<h3>${p.stores.map((s) => esc(storeName(s))).join(" + ")}</h3><span class="muted">${p.coverage} / ${p.total_items} ${t("coverageLabel")}</span></div><div class="plan-total">${money(p.total_cents)}<div class="muted total-note">${t(p.travel_cents === null ? "subtotal" : "total")}</div></div></header><div class="plan-metrics"><span>${t("basket")}: <b>${money(p.basket_cents)}</b></span><span>${icon("route")} ${p.extra_km === null ? ft("distance_" + (p.distance_reason || "not_requested")) : `${p.extra_km} km · ${money(p.travel_cents)} · ${t(p.distance_method === "road" ? "routeReal" : "distanceEstimate")}`}</span>${p.balance_cents ? `<span>${t("futureBalance")}: ${money(p.balance_cents)}</span>` : ""}</div><div class="plan-products">${p.selections.map((s) => `<div class="plan-product"><div>${esc(s.item_name)}<small>${esc(s.offer.name)} · ${s.packs} × ${esc(s.offer.pack)} · ${esc(storeName(s.offer.store))}</small></div><b>${money(s.cost_cents)}</b></div>`).join("")}</div>${routeItinerary(p)}</article>`,
           )
           .join("")
       : empty(
@@ -832,12 +834,13 @@ function itemModal(item = null, offer = null, quickName = "", group = null) {
     note: "",
     offer_id: group ? "" : offer?.id || "",
     family: group?.key || "",
+    ...(group?.details || offer?.details || {}),
   };
   openModal(
     item ? "edit" : "add",
-    `<form id="item-form"><div class="form-grid">${field("name", "product", d.name, "text", 'required maxlength="160"')}${field("query", "query", d.query, "text", 'required minlength="2" maxlength="120"', "queryHint")}<div class="field full"><div id="item-suggestions" class="item-suggestions" aria-live="polite"></div></div>${field("quantity", "quantity", d.quantity, "number", 'required min="0.001" max="10000" step="0.001"')}<div class="field"><label for="f-unit">${t("unit")}</label><select id="f-unit" name="unit">${["un", "kg", "l"].map((u) => `<option ${d.unit === u ? "selected" : ""}>${u}</option>`).join("")}</select></div><div class="field"><label for="f-category">${t("category")}</label><select id="f-category" name="category">${["Mercearia", "Laticínios", "Frescos", "Casa e limpeza", "Outros"].map((c) => `<option value="${esc(c)}" ${d.category === c ? "selected" : ""}>${esc(categoryName(c))}</option>`).join("")}</select></div>${field("needed_on", "needed", d.needed_on, "date")}<div class="field full"><label for="f-note">${t("note")}</label><textarea id="f-note" name="note" maxlength="300">${esc(d.note)}</textarea></div></div><div class="notice">${icon("search")}<span>${t(d.offer_id ? "lockedItem" : "genericItem")}</span></div><div class="form-actions">${item ? `<button type="button" class="quiet" id="record-item-purchase">${icon("wallet")}${ft("addPurchase")}</button><button type="button" class="quiet danger" id="delete-item">${icon("trash")}${t("delete")}</button>` : ""}<button type="button" data-cancel>${t("cancel")}</button><button class="primary" type="submit">${t("save")}</button></div></form>`,
+    `<form id="item-form"><div class="form-grid">${field("name", "product", d.name, "text", 'required maxlength="160"')}${field("query", "query", d.query, "text", 'required minlength="2" maxlength="120"', "queryHint")}<div class="field full"><div id="item-suggestions" class="item-suggestions" aria-live="polite"></div></div>${field("quantity", "quantity", d.quantity, "number", 'required min="0.001" max="10000" step="0.001"')}<div class="field"><label for="f-unit">${t("unit")}</label><select id="f-unit" name="unit">${["un", "kg", "l"].map((u) => `<option ${d.unit === u ? "selected" : ""}>${u}</option>`).join("")}</select></div><div class="field"><label for="f-category">${t("category")}</label><select id="f-category" name="category">${["Mercearia", "Laticínios", "Frescos", "Casa e limpeza", "Outros"].map((c) => `<option value="${esc(c)}" ${d.category === c ? "selected" : ""}>${esc(categoryName(c))}</option>`).join("")}</select></div>${field("needed_on", "needed", d.needed_on, "date")}<div class="field full"><label for="f-note">${t("note")}</label><textarea id="f-note" name="note" maxlength="300">${esc(d.note)}</textarea></div></div><div class="notice">${icon("search")}<span id="item-kind">${t(d.offer_id ? "lockedItem" : "genericItem")}</span></div><div class="form-actions">${item ? `<button type="button" class="quiet" id="record-item-purchase">${icon("wallet")}${ft("addPurchase")}</button><button type="button" class="quiet danger" id="delete-item">${icon("trash")}${t("delete")}</button>` : ""}<button type="button" data-cancel>${t("cancel")}</button><button class="primary" type="submit">${t("save")}</button></div></form>`,
   );
-  setupItemSuggestions(d);
+  setupItemSuggestions(d, !item);
   $("#item-form").onsubmit = async (e) => {
     e.preventDefault();
     const v = Object.fromEntries(new FormData(e.target));
@@ -973,6 +976,8 @@ async function fetchCatalog({
       investigate,
   );
   if (signature !== catalogSignature()) return;
+  state.catalogLoading = false;
+  state.catalogError = false;
   const merge = (old, rows, key) =>
     Array.from(
       new Map([...old, ...rows].map((row) => [row[key], row])).values(),
@@ -1137,6 +1142,7 @@ function bind() {
   bindFeatureActions();
   $("#catalog-search")?.addEventListener("input", (e) => {
     state.search = e.target.value;
+    beginCatalogSearch();
     clearTimeout(searchOffers.timer);
     searchOffers.timer = setTimeout(searchOffers, 450);
   });
@@ -1198,6 +1204,7 @@ function bindProducts() {
 let searchSeq = 0;
 async function searchOffers() {
   const seq = ++searchSeq;
+  beginCatalogSearch();
   try {
     await loadOffers();
     if (seq === searchSeq && $("#catalog-results")) {
@@ -1211,8 +1218,20 @@ async function searchOffers() {
         .forEach((b) => (b.onclick = () => action(b.dataset.action)));
     }
   } catch (err) {
+    if (seq === searchSeq) {
+      state.catalogLoading = false;
+      state.catalogError = true;
+      if ($("#catalog-results")) $("#catalog-results").innerHTML = renderProducts();
+      if ($("#search-status")) $("#search-status").innerHTML = "";
+    }
     toast(state.offline ? t("offline") : err.message);
   }
+}
+function beginCatalogSearch() {
+  state.catalogLoading = true;
+  state.catalogError = false;
+  if ($("#catalog-results")) $("#catalog-results").innerHTML = renderProducts();
+  if ($("#search-status")) $("#search-status").innerHTML = renderSearchStatus();
 }
 async function saveProfile(e) {
   e.preventDefault();
@@ -1302,6 +1321,11 @@ async function locate(key) {
               state.profile[key + "_coords"] = place.coords;
             else state.profile.stores[key].coords = place.coords;
             $("#coords-" + key).textContent = place.coords.join(", ");
+            if (key === "home" || key === "work") {
+              const saved = api("/profile", "PUT", { [key]: place.label, [key + "_coords"]: place.coords });
+              state.profile[key] = place.label;
+              saved.then(() => { saveSnapshot(); toast(t("saved")); loadNearby(true); }).catch(err => toast(err.message));
+            }
             $("#modal").close();
           }),
       );

@@ -164,3 +164,24 @@ def test_asymmetric_road_route_and_commute_baseline():
     assert result['order']==['a','b']
     assert result['km']==0 and result['extra_minutes']==0
     assert distance_for(['unknown'],matrix) is None
+
+
+def test_locations_partial_save_preserves_other_origin_and_invalidates_changed_address(app):
+    c=app.test_client();register(c)
+    c.put('/api/profile',json={'home':'Casa confirmada','home_coords':[-9.1,38.7]})
+    p=c.put('/api/profile',json={'work':'Trabalho confirmado','work_coords':[-9.2,38.8]}).json['profile']
+    assert p['home']=='Casa confirmada' and p['home_coords']==[-9.1,38.7]
+    assert p['work_coords']==[-9.2,38.8]
+    p=c.put('/api/profile',json={'home':'Nova casa'}).json['profile']
+    assert p['home_coords'] is None and p['work_coords']==[-9.2,38.8]
+
+
+def test_plan_explains_missing_home_instead_of_silent_null_distance(app,monkeypatch):
+    import nearby
+    c=app.test_client();register(c)
+    c.post('/api/items',json=dict(name='Arroz',query='arroz',quantity=1,unit='kg'))
+    c.post('/api/offers/manual',json=dict(name='Arroz',store='auchan',price='1.25',size=1,unit='kg',condition='public',vat_included=True))
+    monkeypatch.setattr(nearby,'discover',lambda p:(_ for _ in ()).throw(AssertionError('No origin')))
+    plans=c.get('/api/plan?roads=true').json['plans']
+    assert plans and plans[0]['distance_reason']=='missing_home'
+    assert plans[0]['travel_cents'] is None

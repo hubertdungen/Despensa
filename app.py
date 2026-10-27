@@ -189,7 +189,7 @@ def create_app(data_dir=None, testing=False):
     def health():
         with database() as db:
             db.execute('SELECT 1')
-        return jsonify(ok=True, app='Despensa', version='0.4.0')
+        return jsonify(ok=True, app='Despensa', version='0.5.0')
 
     login_attempts = {}
     login_lock = threading.Lock()
@@ -262,7 +262,10 @@ def create_app(data_dir=None, testing=False):
     def save_profile():
         p, d = profile(g.user['id']), request.get_json()
         for key in ('home', 'work'):
-            p[key] = str(d.get(key, p[key]))[:300]
+            value=str(d.get(key,p[key]))[:300]
+            if value!=p[key] and key+'_coords' not in d:
+                p[key+'_coords']=None
+            p[key]=value
         for key in ('home_coords', 'work_coords'):
             value = d.get(key, p.get(key))
             if value is not None and (not isinstance(value, list) or len(value) != 2 or not all(isinstance(n, (int, float)) for n in value) or not -180 <= value[0] <= 180 or not -90 <= value[1] <= 90):
@@ -433,6 +436,10 @@ def create_app(data_dir=None, testing=False):
             progress=query_progress(db,query,stores,g.user['id']) if query else dict(sources=[],pending=0,total=0,finished=0)
         from searching import find
         found, approximate=find([o for o in get_offers(g.user['id']) if o['country'] in countries and (not store or o['store']==store)],query)
+        from collections import Counter
+        matches=Counter(o['store'] for o in found)
+        for source in progress['sources']:
+            source['matches']=matches[source['store']]
         from products import comparisons
         comparison_profile=p
         if country!='profile':
@@ -575,6 +582,12 @@ def create_app(data_dir=None, testing=False):
                 route_error = True
         result = make_plan(items, offers, p, day, road=road)
         result['route_error'] = route_error
+        mode=request.args.get('route','auto')
+        work_route=mode=='work' or (mode=='auto' and date.fromisoformat(day).weekday() in p.get('workdays',[]) and bool(p.get('work_coords')))
+        for option in result['plans']:
+            option['distance_reason']=None if option['route'] else ('not_requested' if request.args.get('roads')!='true' else
+                'missing_home' if not p.get('home_coords') else 'missing_work' if work_route and not p.get('work_coords') else
+                'service_unavailable' if route_error else 'no_branch' if not road or any(s not in road['ids'] for s in option['stores']) else 'unreachable')
         return jsonify(result)
 
     @app.get('/api/geocode')

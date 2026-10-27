@@ -2,6 +2,7 @@
 import json
 import re
 import unicodedata
+from functools import lru_cache
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from urllib.parse import quote, urljoin
 
@@ -39,14 +40,27 @@ for sid, store in STORE_MAP.items():
     store['subscription'] = None
 STORE_MAP['continente']['subscription'] = dict(name='EntregaZero', kind='delivery',
     source='https://www.continente.pt/servicos/entrega-zero/')
+STORE_MAP['makro-pt']['catalogue_url']='https://produtos.makro.pt/shop'
+STORE_MAP['makro-es']['catalogue_url']='https://tienda.makro.es/shop'
+STORE_MAP['recheio']['catalogue_url']='https://folhetos.recheio.pt/recheio-cash-carry/recheio/folheto-digital-bons-negocios/'
 
 
 def fold(value):
-    return re.sub(r'[^a-z0-9]+', ' ', ''.join(c for c in unicodedata.normalize('NFKD', str(value).lower()) if not unicodedata.combining(c))).strip()
+    return _fold(str(value))
+
+
+@lru_cache(maxsize=32768)
+def _fold(value):
+    return re.sub(r'[^a-z0-9]+', ' ', ''.join(c for c in unicodedata.normalize('NFKD', value.lower()) if not unicodedata.combining(c))).strip()
 
 
 def product_text(value):
     """Shared Iberian product vocabulary; unknown words are retained verbatim."""
+    return _product_text(str(value))
+
+
+@lru_cache(maxsize=32768)
+def _product_text(value):
     text = ' ' + fold(value) + ' '
     for es, pt in [('aceite de oliva','azeite'),('aceite oliva','azeite'),
                    ('sin lactosa','sem lactose'),('semidesnatada','meio gordo'),

@@ -8,7 +8,7 @@ const featureCopy = {
     searchCountries: "Países da pesquisa",
     searchShops: "Pesquisar nas lojas",
     searchResults: "produtos encontrados",
-    approximateSearch: "Incluímos grafias próximas",
+    approximateSearch: "Incluímos grafias ou categorias relacionadas",
     prioritySearch: "A pesquisar nas lojas",
     shopsChecked: "lojas consultadas",
     shopsUnavailable: "sem resposta ou com acesso limitado",
@@ -22,6 +22,36 @@ const featureCopy = {
     methodMap: "Mapa do site",
     methodMicro: "Página de produto",
     methodApi: "Catálogo público da loja",
+    methodLeaflet: "Folheto oficial",
+    methodMetadata: "Catálogo sem preços públicos",
+    bestPrice: "Melhor preço",
+    netPrice: "Sem IVA",
+    grossPrice: "IVA incluído",
+    conditionsOnly: "Preço publicado · confirme condições",
+    validUntil: "Válido até",
+    sourceDetails: "Ver detalhe por loja",
+    matches: "correspondências",
+    noCandidates: "Sem correspondências nas páginas disponíveis",
+    sourceWaiting: "A aguardar descoberta do catálogo",
+    sourceRead: "Consulta terminada",
+    sourceQueued: "Na fila de pesquisa",
+    searchFailed: "Não foi possível atualizar esta pesquisa. Volte a tentar.",
+    reason_country_disabled: "País desativado no perfil",
+    reason_store_disabled: "Loja desativada no perfil",
+    reason_unavailable: "Produto indisponível na fonte",
+    reason_vat_excluded: "Preço sem IVA · excluído do plano e da poupança",
+    reason_location_unconfirmed: "Preço de outra loja ou centro por confirmar",
+    reason_unconfirmed_date: "Data da observação por confirmar",
+    reason_stale: "Observação com mais de 72 horas · aguarda atualização",
+    reason_past_date: "Não há preço confirmado para essa data passada",
+    reason_not_started: "Promoção ainda não começou",
+    reason_expired: "Validade do preço terminou",
+    reason_future_unconfirmed: "Preço futuro ainda não confirmado pela loja",
+    reason_unknown_conditions: "Condições ou mínimos da promoção por confirmar",
+    reason_card_required: "Requer cartão · ative-o nas preferências da loja",
+    reason_subscription_required: "Subscrição de desconto por confirmar",
+    reason_professional_required: "Requer acesso profissional no perfil",
+    reason_coupon_required: "Requer um cupão que não está no perfil",
     researchLogin: "A loja exige uma conta para revelar preços",
     variableWeight: "Venda a peso · total estimado, confirmado na pesagem",
     priceLocation: "Preço de um centro específico · confirme a sua loja",
@@ -63,6 +93,12 @@ const featureCopy = {
     noStores: "Sem lojas identificadas nesta zona de pesquisa.",
     straight:
       "Distâncias em linha reta; percurso rodoviário ainda indisponível.",
+    distance_missing_home: "Confirme e guarde a localização de casa nas definições",
+    distance_missing_work: "Confirme e guarde a localização do trabalho nas definições",
+    distance_no_branch: "Ainda não foi possível localizar uma filial destas lojas nas proximidades",
+    distance_service_unavailable: "O serviço de trajetos não respondeu; volte a calcular",
+    distance_unreachable: "Não foi encontrado um percurso por estrada para estas lojas",
+    distance_not_requested: "Abra o plano para calcular o percurso",
     road: "Distâncias por estrada",
     useStore: "Usar no plano",
     saveStore: "Loja ativada. Guarde as preferências para a usar no plano.",
@@ -113,7 +149,7 @@ const featureCopy = {
     searchCountries: "Países de búsqueda",
     searchShops: "Buscar en las tiendas",
     searchResults: "productos encontrados",
-    approximateSearch: "Incluimos grafías similares",
+    approximateSearch: "Incluimos grafías o categorías relacionadas",
     prioritySearch: "Buscando en las tiendas",
     shopsChecked: "tiendas consultadas",
     shopsUnavailable: "sin respuesta o con acceso limitado",
@@ -127,6 +163,36 @@ const featureCopy = {
     methodMap: "Mapa del sitio",
     methodMicro: "Página de producto",
     methodApi: "Catálogo público de la tienda",
+    methodLeaflet: "Folleto oficial",
+    methodMetadata: "Catálogo sin precios públicos",
+    bestPrice: "Mejor precio",
+    netPrice: "Sin IVA",
+    grossPrice: "IVA incluido",
+    conditionsOnly: "Precio publicado · confirme condiciones",
+    validUntil: "Válido hasta",
+    sourceDetails: "Ver detalle por tienda",
+    matches: "coincidencias",
+    noCandidates: "Sin coincidencias en las páginas disponibles",
+    sourceWaiting: "Esperando el descubrimiento del catálogo",
+    sourceRead: "Consulta finalizada",
+    sourceQueued: "En la cola de búsqueda",
+    searchFailed: "No se pudo actualizar esta búsqueda. Inténtelo de nuevo.",
+    reason_country_disabled: "País desactivado en el perfil",
+    reason_store_disabled: "Tienda desactivada en el perfil",
+    reason_unavailable: "Producto no disponible en la fuente",
+    reason_vat_excluded: "Precio sin IVA · excluido del plan y del ahorro",
+    reason_location_unconfirmed: "Precio de otra tienda o centro por confirmar",
+    reason_unconfirmed_date: "Fecha de observación por confirmar",
+    reason_stale: "Observación de más de 72 horas · pendiente de actualizar",
+    reason_past_date: "No hay precio confirmado para esa fecha pasada",
+    reason_not_started: "La promoción todavía no ha empezado",
+    reason_expired: "El precio ha caducado",
+    reason_future_unconfirmed: "Precio futuro no confirmado por la tienda",
+    reason_unknown_conditions: "Condiciones o mínimos de la promoción por confirmar",
+    reason_card_required: "Requiere tarjeta · actívela en las preferencias de la tienda",
+    reason_subscription_required: "Suscripción de descuento por confirmar",
+    reason_professional_required: "Requiere acceso profesional en el perfil",
+    reason_coupon_required: "Requiere un cupón que no está en el perfil",
     researchLogin: "La tienda exige una cuenta para mostrar precios",
     variableWeight: "Venta al peso · total estimado, confirmado al pesar",
     priceLocation: "Precio de un centro concreto · confirme su tienda",
@@ -169,6 +235,12 @@ const featureCopy = {
     noStores: "No hay tiendas identificadas en esta zona de búsqueda.",
     straight:
       "Distancias en línea recta; ruta por carretera todavía no disponible.",
+    distance_missing_home: "Confirma y guarda la ubicación de casa en ajustes",
+    distance_missing_work: "Confirma y guarda la ubicación del trabajo en ajustes",
+    distance_no_branch: "Todavía no se ha localizado una sucursal de estas tiendas cerca",
+    distance_service_unavailable: "El servicio de rutas no respondió; vuelve a calcular",
+    distance_unreachable: "No se ha encontrado un recorrido por carretera para estas tiendas",
+    distance_not_requested: "Abre el plan para calcular el recorrido",
     road: "Distancias por carretera",
     useStore: "Usar en el plan",
     saveStore:
@@ -229,10 +301,21 @@ document.addEventListener(
 );
 
 function comparisonRow(offer, bestId) {
-  return `<div class="comparison-row ${offer.eligible ? "" : "ineligible"}"><div class="comparison-description"><strong>${esc(storeName(offer.store))}</strong>${offer.id === bestId ? ` <span class="tag">${t("best")}</span>` : ""}<small>${esc(offer.name)}</small><small>${esc(offer.pack)} · ${dateText(offer.observed_at)} · ${conditionLabel(offer.condition)}</small>${offer.variable_weight ? `<small>${ft("variableWeight")}</small>` : ""}${offer.requires_location_confirmation ? `<small>${esc(offer.location)} · ${ft("priceLocation")}</small>` : ""}${!offer.eligible ? `<small>${ft("unavailable")}</small>` : ""}</div><div class="comparison-price"><strong>${offer.unit_price_cents == null ? "—" : money(offer.unit_price_cents)}<small> / ${esc(offer.unit || "?")}</small></strong><small>${money(offer.price_cents)} / ${offer.variable_weight ? esc(offer.unit) : ft("pack").toLowerCase()}</small></div><div class="comparison-actions"><button type="button" class="quiet small" data-history="${esc(offer.id)}" aria-label="${t("history")}: ${esc(offer.name)}">${icon("clock")}</button><button type="button" class="primary small" data-offer="${esc(offer.id)}" aria-label="${t("useProduct")}: ${esc(offer.name)}">${icon("plus")}</button>${offer.source_url ? `<a href="${esc(offer.source_url)}" target="_blank" rel="noopener noreferrer">${t("source")} ↗</a>` : ""}</div></div>`;
+  const reason = offer.ineligible_reason ? ft("reason_" + offer.ineligible_reason) : ft("unavailable");
+  const observed = offer.observed_at ? new Date(offer.observed_at).toLocaleString(locale, {day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}) : t("never");
+  const extra = [
+    offer.variable_weight ? ft("variableWeight") : "",
+    offer.requires_location_confirmation ? `${offer.location} · ${ft("priceLocation")}` : "",
+    offer.valid_to ? `${ft("validUntil")} ${dateText(offer.valid_to)}` : "",
+    !offer.vat_included && offer.conditions_note ? offer.conditions_note : "",
+    !offer.eligible ? reason : "",
+  ].filter(Boolean).map(text => `<small>${esc(text)}</small>`).join("");
+  return `<div class="comparison-row ${offer.eligible ? "" : "ineligible"}"><div class="comparison-description"><strong>${esc(storeName(offer.store))}</strong>${offer.id === bestId ? ` <span class="tag">${ft("bestPrice")}</span>` : ""}<small>${esc(offer.name)}</small><small>${esc(offer.pack)} · ${esc(observed)} · ${conditionLabel(offer.condition)}</small>${extra}</div><div class="comparison-price"><strong>${offer.unit_price_cents == null ? "—" : money(offer.unit_price_cents)}<small> / ${esc(offer.unit || "?")}</small></strong>${!offer.vat_included ? `<span class="tag amber">${ft("netPrice")}</span>` : ""}<small>${money(offer.price_cents)} / ${offer.variable_weight ? esc(offer.unit) : ft("pack").toLowerCase()}</small></div><div class="comparison-actions"><button type="button" class="quiet small" data-history="${esc(offer.id)}" aria-label="${t("history")}: ${esc(offer.name)}">${icon("clock")}</button><button type="button" class="primary small" data-offer="${esc(offer.id)}" aria-label="${t("useProduct")}: ${esc(offer.name)}">${icon("plus")}</button>${offer.source_url ? `<a href="${esc(offer.source_url)}" target="_blank" rel="noopener noreferrer">${t("source")} ↗</a>` : ""}</div></div>`;
 }
 
 function renderComparisonProducts() {
+  if (state.catalogLoading) return `<div class="search-loading" role="status">${icon("refresh","spinner")}<span>${ft("searching")}</span></div>`;
+  if (state.catalogError) return `<div class="notice amber" role="status">${esc(ft("searchFailed"))}</div>`;
   const groups = (state.comparisons || [])
     .map((g) => ({
       ...g,
@@ -253,7 +336,7 @@ function renderComparisonProducts() {
     .map((group) => {
       const best =
         group.offers.find((o) => o.id === group.best_id) || group.offers[0];
-      return `<article class="comparison-card"><header><div>${offerVisual(best)}<h2>${esc(group.label)}</h2><span class="muted">${group.store_count} ${ft("inStores")}</span></div>${!group.same_reference ? `<button type="button" class="primary small" data-group="${esc(group.key)}">${icon("plus")}${ft("useFamily")}</button>` : ""}</header>${!group.same_reference ? `<p class="comparison-hint">${ft(group.exact_reference ? "sameBarcode" : "family")}</p>` : ""}${group.saving_per_unit_cents > 0 ? `<div class="comparison-benefit"><b>${ft("saveUpTo")} ${money(group.saving_per_unit_cents)} / ${esc(group.unit)} (${group.saving_percent}%)</b><small>${ft("comparedWith")}</small></div>` : ""}<div class="comparison-rows">${group.offers
+      return `<article class="comparison-card"><header><div>${offerVisual(best)}<h2>${esc(group.label)}</h2><span class="muted">${group.store_count ? `${group.store_count} ${ft("inStores")}` : ft("conditionsOnly")}</span></div>${!group.same_reference ? `<button type="button" class="primary small" data-group="${esc(group.key)}">${icon("plus")}${ft("useFamily")}</button>` : ""}</header>${!group.same_reference ? `<p class="comparison-hint">${ft(group.exact_reference ? "sameBarcode" : "family")}</p>` : ""}${group.saving_per_unit_cents > 0 ? `<div class="comparison-benefit"><b>${ft("saveUpTo")} ${money(group.saving_per_unit_cents)} / ${esc(group.unit)} (${group.saving_percent}%)</b><small>${ft("comparedWith")}</small></div>` : ""}<div class="comparison-rows">${group.offers
         .slice(0, 4)
         .map((o) => comparisonRow(o, group.best_id))
         .join("")}${
@@ -272,49 +355,55 @@ function renderComparisonProducts() {
 
 let itemSuggestionTimer;
 let itemSuggestionSequence = 0;
-function setupItemSuggestions(d) {
-  const input = $("#f-name"),
-    target = $("#item-suggestions");
-  const search = async () => {
-    const seq = ++itemSuggestionSequence;
-    if (input.value.trim().length < 2) {
+function setupItemSuggestions(d, isNew = false) {
+  clearTimeout(itemSuggestionTimer);
+  const input = $("#f-name"), target = $("#item-suggestions");
+  const dirty = new Set(isNew ? [] : ["quantity", "unit", "category"]);
+  for (const key of ["quantity", "unit", "category"])
+    $("#f-" + key).addEventListener("input", () => dirty.add(key));
+  let selected = false;
+  const search = async (investigate = true) => {
+    if (selected || $("#f-name") !== input || !$("#modal").open) return;
+    const seq = ++itemSuggestionSequence, query = input.value.trim();
+    if (query.length < 2) {
       target.innerHTML = `<span class="muted">${ft("suggestionsHint")}</span>`;
       return;
     }
     try {
-      const r = await api("/offers?q=" + encodeURIComponent(input.value));
-      if (seq !== itemSuggestionSequence || $("#f-name") !== input) return;
-      const groups = (r.comparisons || [])
-        .filter((g) => !g.same_reference)
-        .slice(0, 5);
-      target.innerHTML = `<span class="eyebrow">${ft("suggestions")}</span><div class="suggestion-options">${groups.map((g, i) => `<button type="button" class="suggestion" data-suggestion="${i}"><span>${esc(g.label)}</span><small>${g.store_count} ${ft("inStores")}</small></button>`).join("")}</div>`;
-      target.querySelectorAll("[data-suggestion]").forEach(
-        (button) =>
-          (button.onclick = () => {
-            const group = groups[+button.dataset.suggestion];
-            d.family = group.key;
-            d.offer_id = "";
-            input.value = group.label;
-            $("#f-query").value = group.query;
-            $("#f-unit").value = group.unit;
-            target
-              .querySelectorAll(".suggestion")
-              .forEach((b) => b.classList.toggle("selected", b === button));
-          }),
-      );
+      const r = await api("/offers?q=" + encodeURIComponent(query) + "&limit=8&investigate=" + investigate);
+      if (seq !== itemSuggestionSequence || input.value.trim() !== query || $("#f-name") !== input || !$("#modal").open || selected) return;
+      const groups = r.comparisons || [];
+      target.innerHTML = `<span class="eyebrow">${ft("suggestions")}</span><div class="suggestion-options">${groups.map((g, i) => {
+        const o = g.offers[0];
+        return `<button type="button" class="suggestion" data-suggestion="${i}"><span>${esc(g.label)}</span><small>${esc(o.brand || "")} · ${esc(o.pack || "")} · ${g.store_count || 1} ${ft("inStores")} · ${money(o.price_cents)}</small></button>`;
+      }).join("")}</div>${r.research?.pending ? `<span class="muted">${ft("researchWait")}</span>` : !groups.length ? `<span class="muted">${t("noResults")}</span>` : ""}`;
+      target.querySelectorAll("[data-suggestion]").forEach(button => button.onclick = () => {
+        selected = true;
+        clearTimeout(itemSuggestionTimer);
+        const group = groups[+button.dataset.suggestion], details = group.details;
+        d.family = details.family; d.offer_id = details.offer_id;
+        input.value = details.name;
+        $("#f-query").value = details.query;
+        for (const key of ["quantity", "unit", "category"])
+          if (!dirty.has(key) && details[key]) $("#f-" + key).value = details[key];
+        $("#item-kind").textContent = t(d.offer_id ? "lockedItem" : "genericItem");
+        target.querySelectorAll(".suggestion").forEach(b => b.classList.toggle("selected", b === button));
+      });
+      if (r.research?.pending) itemSuggestionTimer = setTimeout(() => search(false), 3000);
     } catch {
-      target.innerHTML = `<span class="muted">${t("offline")}</span>`;
+      if (seq === itemSuggestionSequence && $("#f-name") === input)
+        target.innerHTML = `<span class="muted">${t("offline")}</span>`;
     }
   };
   input.addEventListener("input", () => {
-    d.family = "";
-    d.offer_id = "";
+    selected = false; ++itemSuggestionSequence;
+    d.family = ""; d.offer_id = "";
     clearTimeout(itemSuggestionTimer);
     itemSuggestionTimer = setTimeout(search, 220);
   });
   $("#f-query").addEventListener("input", () => {
-    d.family = "";
-    d.offer_id = "";
+    selected = true; ++itemSuggestionSequence;
+    clearTimeout(itemSuggestionTimer); d.family = ""; d.offer_id = "";
   });
   search();
 }
@@ -587,16 +676,25 @@ function bindFeatureActions() {
 }
 
 function renderSearchStatus() {
+  if (state.catalogLoading) return `<div class="catalog-status" role="status">${ft("searching")}</div>`;
   const progress = state.queryResearch;
-  const unavailable =
-    progress?.sources?.filter((s) => s.status === "unavailable").length || 0;
-  return `<div class="catalog-status"><span><b>${state.catalogTotal || 0}</b> ${ft("searchResults")}${state.catalogApproximate ? ` · ${ft("approximateSearch")}` : ""}</span>${state.search && progress?.total ? `<span>${progress.pending ? `${icon("refresh", "spinner")} ${ft("prioritySearch")} · ` : ""}${progress.finished}/${progress.total} ${ft("shopsChecked")}${unavailable ? ` · ${unavailable} ${ft("shopsUnavailable")}` : ""}</span>` : ""}</div><p class="privacy-note">${ft("exploreScope")}</p>`;
+  const unavailable = progress?.sources?.filter(s => s.status === "unavailable").length || 0;
+  const status = source => source.error === "authentication_required" ? ft("researchLogin") :
+    ["access_restricted","robots_restricted"].includes(source.error) ? ft("researchBlocked") :
+    source.error === "no_candidates" ? ft("noCandidates") :
+    source.status === "waiting" ? ft("sourceWaiting") :
+    source.status === "running" ? ft("prioritySearch") :
+    source.status === "queued" ? ft("sourceQueued") :
+    source.status === "unavailable" ? ft("researchFailed") : ft("sourceRead");
+  const details = state.search && progress?.total ? `<details id="query-sources" class="query-sources" ${$("#query-sources")?.open ? "open" : ""}><summary>${ft("sourceDetails")}</summary><div class="query-source-grid">${progress.sources.map(source => `<div><strong>${esc(storeName(source.store))}</strong><small>${esc(status(source))}</small>${source.matches ? `<small>${source.matches} ${ft("matches")}</small>` : ""}</div>`).join("")}</div></details>` : "";
+  return `<div class="catalog-status"><span><b>${state.catalogTotal || 0}</b> ${ft("searchResults")}${state.catalogApproximate ? ` · ${ft("approximateSearch")}` : ""}</span>${state.search && progress?.total ? `<span>${progress.pending ? `${icon("refresh", "spinner")} ${ft("prioritySearch")} · ` : ""}${progress.finished}/${progress.total} ${ft("shopsChecked")}${unavailable ? ` · ${unavailable} ${ft("shopsUnavailable")}` : ""}</span>` : ""}</div>${details}<p class="privacy-note">${ft("exploreScope")}</p>`;
 }
 
 let catalogPolling = false;
 setInterval(async () => {
   if (
     catalogPolling ||
+    state.catalogLoading ||
     state.view !== "explore" ||
     !state.user ||
     state.offline ||
@@ -694,13 +792,15 @@ function renderRadar(expanded = false) {
                   official_sitemap: "methodMap",
                   product_microdata: "methodMicro",
                   public_catalogue_api: "methodApi",
+                  public_catalogue_metadata: "methodMetadata",
+                  official_leaflet: "methodLeaflet",
                 }[m] || "methodStructured",
               ),
             )
             .filter((v, i, a) => a.indexOf(v) === i)
             .join(" · ")}</small>`
         : ""
-    }${expanded && r.retry_at ? `<small>${ft("retry")}: ${new Date(r.retry_at * 1000).toLocaleString(locale, { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" })}</small>` : ""}</div></div>`;
+    }${expanded && s.catalogue_url ? `<small><a href="${esc(s.catalogue_url)}" target="_blank" rel="noopener noreferrer">${ft("methodTiles")} ↗</a></small>` : ""}${expanded && r.retry_at ? `<small>${ft("retry")}: ${new Date(r.retry_at * 1000).toLocaleString(locale, { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" })}</small>` : ""}</div></div>`;
   };
   return (
     stores

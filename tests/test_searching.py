@@ -189,3 +189,29 @@ def test_valid_barcode_groups_other_product_types_without_guessing_names():
     assert family(dict(b,size=2))['key']!=family(a)['key']
     group=comparisons([a,b],default_profile())[0]
     assert group['store_count']==2 and group['exact_reference'] and not group['same_reference']
+
+
+def test_cereal_category_words_match_without_changing_brand_or_dietary_constraints():
+    from searching import discovery_query
+    fitness=offer('fitness','Cereais Trigo e Aveia Integral',brand='Fitness',category='Cereais Linha e Fibra',pack='625 g',size=.625,unit='kg')
+    national=offer('other','Cereais +Linha',brand='Nacional',category='Cereais Linha e Fibra')
+    found,approximate=find([fitness,national],'Cereais Linha e Fibra Fitness')
+    assert [o['id'] for o in found]==['fitness'] and not approximate
+    found,approximate=find([dict(fitness,category='')],'Cereais Linha e Fibra Fitness')
+    assert found and approximate
+    assert not find([fitness],'Cereais Linha e Fibra Fitness sem açúcar')[0]
+    assert discovery_query('Cereais Linha e Fibra Fitness')=='cereal fitnes'
+    assert 'fibra' in discovery_query('Leite com fibra')
+
+
+def test_specific_suggestions_fill_published_pack_and_keep_brand(tmp_path):
+    app,c=client(tmp_path)
+    save(app,[offer('coffee','Café em Grão Gold',brand='Delta',pack='500 g',size=.5,unit='kg'),
+        offer('capsule','Cápsulas Café Delta Q',brand='Delta',pack='10 un',size=10,unit='un')])
+    result=c.get('/api/offers?q=Café Delta&investigate=false').json
+    assert len(result['comparisons'])==2
+    details={g['details']['offer_id']:g['details'] for g in result['comparisons']}
+    assert details['coffee']['quantity']==.5 and details['coffee']['unit']=='kg'
+    assert 'Delta' in details['coffee']['query']
+    assert details['capsule']['quantity']==10 and details['capsule']['unit']=='un'
+    assert all(d['category']=='Mercearia' for d in details.values())

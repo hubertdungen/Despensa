@@ -7,11 +7,12 @@
 
 Despensa é uma aplicação de compras pessoais que pode alojar no seu computador ou NAS. Organiza listas mensais, guarda as suas preferências e compara os produtos para os quais existem preços observados. A interface funciona em português europeu e espanhol, no computador e no telemóvel.
 
-**Versão 0.4: fruta, carne fresca e pesquisa por marca/formato.** A aplicação descobre páginas, combina vários métodos de leitura, guarda o progresso e repete fontes que falham. O radar mostra a cobertura efetivamente conseguida em cada loja; uma fonte sem resposta nunca aparece como um preço encontrado.
+**Versão 0.5: sugestões com detalhes, localizações persistentes e folhetos oficiais.** A aplicação descobre páginas, combina vários métodos de leitura, guarda o progresso e repete fontes que falham. O radar mostra a cobertura efetivamente conseguida em cada loja; uma fonte sem resposta nunca aparece como um preço encontrado.
 
 ## O que já pode fazer
 
 - Entrar diretamente com Authelia numa instalação configurada para SSO, ou usar contas locais independentes com controlo para mostrar a palavra-passe.
+- Escolher sugestões de famílias ou referências específicas, incluindo Café Delta e cereais Fitness: preenche categoria, unidade e quantidade publicada, preservando alterações manuais. As sugestões acompanham a investigação enquanto a janela estiver aberta.
 - Organizar produtos por mês e categoria, com quantidades, notas e data de compra; repetir o mês anterior.
 - Usar um modo de compras com controlos maiores e lista offline. Alterações feitas offline ficam numa fila local e sincronizam quando regressa a ligação e a sessão continua válida.
 - Pesquisar por nome, marca, formato, plurais e palavras incompletas, com tolerância a pequenos erros de escrita. Selecionar Portugal, Espanha ou ambos e carregar mais resultados sem cortar o catálogo nos primeiros 200 produtos.
@@ -21,11 +22,12 @@ Despensa é uma aplicação de compras pessoais que pode alojar no seu computado
 - Pesquisar fruta e carne vendidas ao kg, incluindo quantidades inferiores a 1 kg e embalagens de peso aproximado.
 - Encontrar produtos por marca e formato mesmo quando o volume não aparece no endereço da página; o Auchan tem também pesquisa direta no catálogo público.
 - Distinguir preços públicos e Lidl Plus nos dados de catálogo; ler dados públicos da Makro ES com IVA e identificação do centro. Preços de um centro específico ficam fora do plano até ser possível confirmar a loja.
+- Consultar automaticamente o folheto digital oficial do Recheio, com validade e preços Cash sem IVA explicitamente identificados e excluídos dos planos pessoais. O catálogo público da Makro PT permite descobrir referências, mas continua a pedir sessão da loja para revelar preços.
 - Registar preços de lojas físicas de Portugal e Espanha, incluindo Makro e Recheio, formato, IVA, localização, validade, cartão, subscrição ou cupão específico.
 - Definir lojas acessíveis, cartões e códigos de cupão. Subscrições aparecem apenas onde existe um programa identificado: EntregaZero é uma subscrição de entregas, sem assumir descontos nos produtos.
 - Comparar até três lojas por ida, comprando embalagens inteiras. Os cabazes incompletos são identificados e nunca vencem um completo por omitir produtos.
 - Separar o valor pago hoje do saldo futuro em cartão.
-- Localizar casa e trabalho ao guardar as preferências, descobrir lojas perto de ambos e estimar automaticamente os quilómetros, os desvios e a ordem das paragens. Nos dias de trabalho considera trabalho→lojas→casa; noutros dias, casa→lojas→casa.
+- Localizar casa e trabalho, guardando imediatamente cada localização escolhida, descobrir lojas perto de ambos e estimar automaticamente os quilómetros, os desvios e a ordem das paragens. Nos dias de trabalho considera trabalho→lojas→casa; noutros dias, casa→lojas→casa. O plano explica se faltam coordenadas, uma filial próxima ou uma resposta do serviço de percursos.
 - Acompanhar o orçamento do Rumo para o mês selecionado, atualizado automaticamente através de uma exportação limitada às despesas de supermercado.
 - Registar compras e ver gastos e poupança mensal face à loja habitual ou a uma referência confirmada, com os custos adicionais de deslocação separados.
 - Exportar os seus dados em JSON.

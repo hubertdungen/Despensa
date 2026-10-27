@@ -123,6 +123,7 @@ test('radar searches brands, pages all results and updates while priority resear
   await page.locator('#catalog-country').selectOption('ES');
   await expect(page.locator('.comparison-card')).toHaveCount(0);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
+  await page.unrouteAll({behavior:'wait'});
 });
 
 test('fresh bananas compare per kg with card conditions and branded water matches 7L',async({page})=>{
@@ -143,4 +144,46 @@ test('fresh bananas compare per kg with card conditions and branded water matche
   await expect(page.locator('.comparison-row')).toContainText('7L');
   await expect(page.locator('.comparison-price')).toContainText('1,99');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
+});
+
+test('coffee and cereal suggestions fill details and preserve an edited quantity',async({page})=>{
+  await page.goto('/');await page.locator('#auth-toggle').click();
+  await page.locator('#username').fill('autofill-test');await page.locator('#password').fill('temporary-test-password-2026');
+  await page.locator('#auth-form button[type=submit]').click();await expect(page.locator('#quick-add')).toBeVisible();
+  await page.locator('#quick-add input').fill('Café Delta');await page.locator('#quick-add button').click();
+  await expect(page.locator('[data-suggestion]')).toHaveCount(2);
+  await page.locator('[data-suggestion]').filter({hasText:'Moído'}).click();
+  await expect(page.locator('#f-unit')).toHaveValue('kg');
+  await expect(page.locator('#f-quantity')).toHaveValue('0.22');
+  await expect(page.locator('#f-query')).toHaveValue(/Delta/);
+  await page.locator('#f-quantity').fill('2');await page.locator('#f-quantity').press('ArrowUp');
+  await expect(page.locator('#modal')).toBeVisible();await page.locator('[data-cancel]').click();
+  await page.locator('#quick-add input').fill('Cereais Linha e Fibra Fitness');await page.locator('#quick-add button').click();
+  await page.locator('#f-quantity').fill('3');
+  await page.locator('[data-suggestion]').first().click();
+  await expect(page.locator('#f-quantity')).toHaveValue('3');
+  await expect(page.locator('#f-unit')).toHaveValue('kg');
+  await expect(page.locator('#f-query')).toHaveValue(/Fitness/);
+  await page.locator('#item-form button[type=submit]').click();
+  await expect(page.locator('.item-name')).toContainText('Cereais');
+});
+
+test('locating both origins persists them immediately without losing either location',async({page})=>{
+  await page.route('**/api/geocode?**',route=>{
+    const home=new URL(route.request().url()).searchParams.get('q').includes('Casa');
+    return route.fulfill({json:{results:[{label:home?'Casa confirmada':'Trabalho confirmado',coords:home?[-9.1,38.7]:[-9.2,38.8]}]}});
+  });
+  await page.goto('/');await page.locator('#auth-toggle').click();
+  await page.locator('#username').fill('routine-test');await page.locator('#password').fill('temporary-test-password-2026');
+  await page.locator('#auth-form button[type=submit]').click();await expect(page.locator('#quick-add')).toBeVisible();
+  await page.locator('.mobile-nav [data-view=profile]').click();
+  await page.locator('#f-home').fill('Casa');await page.locator('[data-locate=home]').click();
+  const homeSaved=page.waitForResponse(r=>r.url().endsWith('/api/profile')&&r.request().method()==='PUT');
+  await page.locator('[data-place]').click();await homeSaved;
+  await page.locator('#f-work').fill('Trabalho');await page.locator('[data-locate=work]').click();
+  const workSaved=page.waitForResponse(r=>r.url().endsWith('/api/profile')&&r.request().method()==='PUT');
+  await page.locator('[data-place]').click();await workSaved;
+  await page.reload();await page.locator('.mobile-nav [data-view=profile]').click();
+  await expect(page.locator('#f-home')).toHaveValue('Casa confirmada');
+  await expect(page.locator('#f-work')).toHaveValue('Trabalho confirmado');
 });

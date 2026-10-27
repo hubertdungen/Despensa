@@ -27,8 +27,8 @@ ROOTS = {
     'continente': 'https://www.continente.pt', 'auchan': 'https://www.auchan.pt',
     'pingo-doce': 'https://www.pingodoce.pt', 'lidl-pt': 'https://www.lidl.pt',
     'aldi-pt': 'https://www.aldi.pt', 'intermarche': 'https://www.intermarche.pt',
-    'mercadona-pt': 'https://www.mercadona.pt', 'makro-pt': 'https://www.makro.pt',
-    'recheio': 'https://www.recheio.pt', 'mercadona-es': 'https://tienda.mercadona.es',
+    'mercadona-pt': 'https://www.mercadona.pt', 'makro-pt': 'https://produtos.makro.pt',
+    'recheio': 'https://folhetos.recheio.pt', 'mercadona-es': 'https://tienda.mercadona.es',
     'carrefour': 'https://www.carrefour.es', 'dia': 'https://www.dia.es',
     'eroski': 'https://supermercado.eroski.es', 'alcampo': 'https://www.compraonline.alcampo.es',
     'lidl-es': 'https://www.lidl.es', 'makro-es': 'https://tienda.makro.es',
@@ -42,7 +42,7 @@ SEEDS = {
     'aldi-es': ['https://www.aldi.es/.aldi-nord-sitemap.xml'],
     'carrefour': ['https://www.carrefour.es/supermercado/la-despensa/lacteos/leche/cat20093/c'],
     'alcampo': ['https://www.compraonline.alcampo.es/categories/Leche-Huevos-L%C3%A1cteos-Yogures-y-Bebidas-vegetales/Leche/OC1603'],
-    'recheio': ['https://www.recheio.pt/portal/sitemap.xml'],
+    'recheio': ['https://folhetos.recheio.pt/recheio-cash-carry/recheio/folheto-digital-bons-negocios/'],
 }
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS research_urls(store TEXT NOT NULL,url TEXT NOT NULL,kind TEXT NOT NULL,
@@ -60,6 +60,8 @@ CREATE TABLE IF NOT EXISTS research_watchers(user_id TEXT NOT NULL,query TEXT NO
 _rules = {}
 _last = {}
 _rate_lock = threading.Lock()
+_leaflet_lock=threading.Lock()
+_leaflet_cache={}
 
 
 def setup(db):
@@ -69,19 +71,21 @@ def setup(db):
 def upgrade_adapters(db):
     """Revisit pages missed by old parsers once, without resetting access blocks."""
     revision=db.execute("SELECT value FROM meta WHERE key='research_adapter_revision'").fetchone()
-    if revision and json.loads(revision[0])>=6:
+    if revision and json.loads(revision[0])>=7:
         return
-    for store in ('continente','auchan','lidl-pt','lidl-es','aldi-pt','aldi-es','makro-es'):
+    for store in ('continente','auchan','lidl-pt','lidl-es','aldi-pt','aldi-es','makro-es','makro-pt','recheio'):
         row=db.execute('SELECT data FROM research_sources WHERE store=?',(store,)).fetchone()
         source=json.loads(row[0]) if row else {}
-        if store!='makro-es' and any(e in ('access_restricted','robots_restricted') for e in source.get('errors',[])):
+        if store not in ('makro-es','makro-pt','recheio') and any(e in ('access_restricted','robots_restricted') for e in source.get('errors',[])):
             continue
         if row:
             source.update(retry_at=0,failures=0,status='discovering',errors=[])
             db.execute('UPDATE research_sources SET data=? WHERE store=?',(json.dumps(source),store))
+        if store in ('makro-pt','recheio'):
+            db.execute('DELETE FROM research_urls WHERE store=? AND url NOT LIKE ?',(store,ROOTS[store]+'/%'))
         db.execute('UPDATE research_urls SET next_check=0 WHERE store=?',(store,))
         db.execute("UPDATE research_tasks SET status='queued',next_check=0,found=0,error='' WHERE store=? AND requested>?",(store,time.time()-86400))
-    db.execute("INSERT OR REPLACE INTO meta VALUES('research_adapter_revision','6')")
+    db.execute("INSERT OR REPLACE INTO meta VALUES('research_adapter_revision','7')")
 
 
 def request_query(db, query, stores=None, force=False, owner=None):
@@ -189,13 +193,55 @@ def robots(root):
     hit = _rules.get(root)
     if hit and time.time() - hit[0] < 21600:
         return hit[1]
-    content = read(root + '/robots.txt', 1_000_000).decode('utf-8', 'replace')
+    content = read(root + '/robots.txt', 1_000_000).decode('utf-8-sig', 'replace')
     if '<html' in content.casefold() or '<!doctype' in content.casefold():
         raise ValueError('A fonte exige verificação de acesso')
-    parser = robotparser.RobotFileParser()
+    parser = SourceRules()
     parser.parse(content.splitlines())
     _rules[root] = (time.time(), parser)
     return parser
+
+
+class SourceRules(robotparser.RobotFileParser):
+    """Apply wildcard paths and longest-match Allow precedence from RFC 9309."""
+    def can_fetch(self, agent, url):
+        if self.disallow_all:
+            return False
+        if self.allow_all:
+            return True
+        name=agent.casefold().split('/',1)[0]
+        entries=[e for e in self.entries if any(a.casefold() in name for a in e.useragents)]
+        if entries:
+            longest=max(len(a) for e in entries for a in e.useragents if a.casefold() in name)
+            entries=[e for e in entries if any(len(a)==longest and a.casefold() in name for a in e.useragents)]
+        elif self.default_entry:
+            entries=[self.default_entry]
+        target=urlsplit(url);path=unquote(target.path or '/')+('?' + unquote(target.query) if target.query else '')
+        matches=[]
+        for entry in entries:
+            for rule in entry.rulelines:
+                pattern=unquote(rule.path)
+                end=pattern.endswith('$');pattern=pattern[:-1] if end else pattern
+                expression='^'+re.escape(pattern).replace(r'\*','.*')+('$' if end else '')
+                if re.search(expression,path):
+                    matches.append((len(pattern.replace('*','')),rule.allowance))
+        return max(matches,default=(0,True))[1]
+
+
+def leaflet_asset_allowed(url):
+    """Only public signed assets referenced by the retailer's own publication."""
+    root='https://cdn.ipaper.io'
+    try:
+        rules=robots(root)
+    except requests.HTTPError as error:
+        # This CDN has no public robots resource (403). RFC 9309 §2.3.1.3
+        # permits access when that resource returns 4xx; actual asset failures
+        # are still respected. Network errors/5xx never permit a request.
+        if error.response.status_code not in (403,404):
+            raise
+        rules=SourceRules();rules.parse(['User-agent: *','Allow: /'])
+        _rules[root]=(time.time(),rules)
+    return rules.can_fetch('Despensa',url)
 
 
 def walk(value):
@@ -223,9 +269,14 @@ def base_offer(store, oid, name, price, pack, url, image='', brand='', **extra):
 def parse_page(html, store, url):
     """Independent parsers can rescue the same page when one representation changes."""
     from retailer_data import lidl_records,makro_records
-    if store=='makro-es' and html.lstrip().startswith(b'{' if isinstance(html,bytes) else '{'):
-        rows=makro_records(json.loads(html),store,url,base_offer)
-        return rows,['public_catalogue_api'] if rows else []
+    if store in ('makro-es','makro-pt','recheio') and html.lstrip().startswith(b'{' if isinstance(html,bytes) else '{'):
+        data=json.loads(html)
+        if store=='recheio' and data.get('kind')=='recheio_leaflet':
+            from leaflets import records
+            rows=records(data,base_offer)
+            return rows,['official_leaflet'] if rows else []
+        rows=makro_records(data,store,url,base_offer)
+        return rows,['public_catalogue_api'] if rows else ['public_catalogue_metadata'] if data.get('result') else []
     soup = BeautifulSoup(html, 'html.parser')
     found, methods = {}, []
     if store.startswith('lidl-'):
@@ -353,7 +404,7 @@ def parse_page(html, store, url):
                         variable_weight=True,size=1,unit='kg',pack='1 kg · venda a peso',nominal_pack=pack,
                         minimum_quantity=amount if 'minima' in fold(pack) else None,
                         weight_step=amount if 'emb' in fold(pack).split() else None)
-                o['category']=' / '.join(e.get_text(' ',strip=True) for e in soup.select('.breadcrumb-item'))
+                o['category']=' / '.join(dict.fromkeys(e.get_text(' ',strip=True) for e in soup.select('.breadcrumb-item, .breadcrumb a, [aria-label="breadcrumb"] a, [itemprop="breadcrumb"] a')))
             excluded=('Discontinued','SoldOut') if store.startswith('lidl-') else ('Discontinued','SoldOut','OutOfStock')
             o['available'] = not str(price.get('availability','')).endswith(excluded)
             # In-store retailers use OutOfStock for the unavailable online channel;
@@ -409,7 +460,7 @@ def discover_urls(content, url, store):
                 loc=loc.replace('https://distribucion-hosteleria.makro.es/','https://tienda.makro.es/',1)
             if loc and public_url(loc,root):
                 result.append((loc,'sitemap' if index else 'product'))
-        if store=='makro-es' and index:
+        if store in ('makro-es','makro-pt') and index:
             # The official index separates categories (part 1) and products
             # (part 2); spend the bounded discovery budget on product prices.
             result.sort(key=lambda entry:'/part/2' not in entry[0])
@@ -429,10 +480,21 @@ def discover_urls(content, url, store):
 
 def read_product(url,store,rules):
     """The official Makro SPA exposes the same anonymous data as its web shop."""
-    if store=='makro-es':
+    if store=='recheio':
+        from leaflets import collect
+        with _leaflet_lock:
+            hit=_leaflet_cache.get(url)
+            if hit and time.monotonic()-hit[0]<60:
+                return hit[1]
+            content=json.dumps(collect(read(url),read,leaflet_asset_allowed)).encode()
+            _leaflet_cache.clear()
+            _leaflet_cache[url]=(time.monotonic(),content)
+            return content
+    if store in ('makro-es','makro-pt'):
         match=re.search(r'/shop/pv/(BTY-[A-Z]\d+)/(\d+)/(\d+)/',url)
         if match:
-            target=ROOTS[store]+'/evaluate.article.v1/betty-variants?storeIds=00001&ids='+match[1]+match[2]+'&country=ES&locale=es-ES'
+            country=STORE_MAP[store]['country'];locale='pt-PT' if country=='PT' else 'es-ES'
+            target=ROOTS[store]+'/evaluate.article.v1/betty-variants?storeIds=00001&ids='+match[1]+match[2]+'&country='+country+'&locale='+locale
             if not rules.can_fetch('Despensa',target):
                 raise ValueError('robots_restricted')
             return read(target)
@@ -549,6 +611,8 @@ def run_research(app, report, queries=None, per_store=12, stores=None):
                         break  # No retry storm or identity rotation against access blocks.
                 report(dict(state))
             state['status']='ok' if state['count'] else 'discovering' if pages_read else 'unavailable'
+            if store=='makro-pt' and not state['count'] and 'public_catalogue_metadata' in state['methods']:
+                state.update(status='unavailable',errors=['authentication_required'])
             if state['errors'] and state['count']:
                 state['status']='partial'
         except Exception as error:
@@ -610,6 +674,8 @@ def search_store(app, task, page_limit=6):
                 choices.append((relevance,entry))
         if not choices:
             for entry in entries:
+                if not public_url(entry['url'],root):
+                    continue
                 label=unquote(urlsplit(entry['url']).path).replace('-',' ')
                 relevance=rank(discovery,label,fuzzy=True)
                 if relevance:
@@ -619,13 +685,21 @@ def search_store(app, task, page_limit=6):
         # including products whose sitemap URL has no brand/format information.
         # Other retailers' blocked search routes are never used as substitutes.
         if store=='auchan':
-            url=root+'/pt/pesquisa?q='+quote(query)
+            public_query=re.sub(r'\blinha\s+(?:e\s+)?fibra\b',' ',query) if 'cereal' in discovery else query
+            url=root+'/pt/pesquisa?q='+quote(public_query)
             if rules.can_fetch('Despensa',url):
                 with app.database() as db:
                     db.execute('INSERT OR IGNORE INTO research_urls(store,url,kind) VALUES(?,?,?)',(store,url,'search'))
                     entry=dict(db.execute('SELECT * FROM research_urls WHERE store=? AND url=?',(store,url)).fetchone())
                 if entry['next_check']<=now:
                     choices.insert(0,(10000,entry))
+        if store=='recheio':
+            with app.database() as db:
+                for url in SEEDS[store]:
+                    db.execute('INSERT OR IGNORE INTO research_urls(store,url,kind) VALUES(?,?,?)',(store,url,'leaflet'))
+                    entry=dict(db.execute('SELECT * FROM research_urls WHERE store=? AND url=?',(store,url)).fetchone())
+                    if entry['next_check']<=now:
+                        choices.insert(0,(10000,entry))
         if not choices:
             # Discovery may still be running for a new installation or retailer.
             waiting=not source.get('indexed') and now-task['requested']<1800
@@ -666,9 +740,9 @@ def search_store(app, task, page_limit=6):
                     checked_at=datetime.now(timezone.utc).isoformat(),methods=sorted(set(source.get('methods',[]))|methods),
                     catalogue_count=db.execute("SELECT COUNT(*) FROM offers WHERE store=? AND user_id=''",(store,)).fetchone()[0])
                 db.execute('INSERT OR REPLACE INTO research_sources VALUES(?,?)',(store,json.dumps(source)))
-        if store=='recheio' and not found and not errors:
+        if store=='makro-pt' and not found and not errors and 'public_catalogue_metadata' in methods:
             # The official public catalogue explicitly requires an authenticated
-            # Recheio account to reveal prices. Authelia is not a retailer session.
+            # Makro account to reveal prices. Authelia is not a retailer session.
             with app.database() as db:
                 source.update(store=store,status='unavailable',errors=['authentication_required'],retry_at=time.time()+21600)
                 db.execute('INSERT OR REPLACE INTO research_sources VALUES(?,?)',(store,json.dumps(source)))
