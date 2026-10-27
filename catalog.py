@@ -86,7 +86,7 @@ def pack_size(text):
 def get(url, params=None):
     # One catalogue page per query, no retries on blocks, no login/cookie harvesting.
     response = requests.get(url, params=params, timeout=(8, 22), headers={
-        'User-Agent': 'Despensa/0.2 (+https://github.com/hubertdungen/Despensa; personal grocery planner)',
+        'User-Agent': 'Despensa/0.3 (+https://github.com/hubertdungen/Despensa; personal grocery planner)',
         'Accept-Language': 'pt-PT,es;q=0.8',
     })
     response.raise_for_status()

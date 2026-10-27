@@ -10,6 +10,7 @@ import io
 import json
 import re
 import time
+import threading
 from collections import Counter
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -21,7 +22,7 @@ import requests
 from bs4 import BeautifulSoup
 from catalog import STORE_MAP, CATEGORY_SOURCES, cents, fold, product_text, pack_size, parse_retailer
 
-AGENT = 'Despensa/0.2 (+https://github.com/hubertdungen/Despensa; automatic grocery research)'
+AGENT = 'Despensa/0.3 (+https://github.com/hubertdungen/Despensa; automatic grocery research)'
 ROOTS = {
     'continente': 'https://www.continente.pt', 'auchan': 'https://www.auchan.pt',
     'pingo-doce': 'https://www.pingodoce.pt', 'lidl-pt': 'https://www.lidl.pt',
@@ -49,28 +50,45 @@ CREATE TABLE IF NOT EXISTS research_urls(store TEXT NOT NULL,url TEXT NOT NULL,k
     PRIMARY KEY(store,url));
 CREATE TABLE IF NOT EXISTS research_sources(store TEXT PRIMARY KEY,data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS research_queries(query TEXT PRIMARY KEY,requested REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS research_tasks(query TEXT NOT NULL,store TEXT NOT NULL,requested REAL NOT NULL,
+    status TEXT NOT NULL DEFAULT 'queued',updated REAL NOT NULL DEFAULT 0,next_check REAL NOT NULL DEFAULT 0,
+    found INTEGER NOT NULL DEFAULT 0,error TEXT NOT NULL DEFAULT '',PRIMARY KEY(query,store));
+CREATE INDEX IF NOT EXISTS research_tasks_pending ON research_tasks(status,next_check,requested);
+CREATE TABLE IF NOT EXISTS research_watchers(user_id TEXT NOT NULL,query TEXT NOT NULL,store TEXT NOT NULL,
+    PRIMARY KEY(user_id,query,store));
 '''
 _rules = {}
 _last = {}
+_rate_lock = threading.Lock()
 
 
 def setup(db):
     db.executescript(SCHEMA)
 
 
-def request_query(db, query):
+def request_query(db, query, stores=None, force=False, owner=None):
     query = fold(query)[:120]
     if len(query) < 3:
         return
     now = time.time()
     row = db.execute('SELECT requested FROM research_queries WHERE query=?', (query,)).fetchone()
-    if row and now - row[0] < 21600:
-        return
     # A bounded shared catalogue queue contains product terms, never account IDs,
     # addresses, notes or full shopping lists. It is not returned to other accounts.
     if not row and db.execute('SELECT COUNT(*) FROM research_queries').fetchone()[0] >= 300:
         db.execute('DELETE FROM research_queries WHERE query=(SELECT query FROM research_queries ORDER BY requested LIMIT 1)')
-    db.execute('INSERT OR REPLACE INTO research_queries VALUES(?,?)', (query, now))
+    if not row or now-row[0]>=21600:
+        db.execute('INSERT OR REPLACE INTO research_queries VALUES(?,?)', (query, now))
+    for store in (stores if stores is not None else ROOTS):
+        if store not in ROOTS:
+            continue
+        if owner:
+            db.execute('INSERT OR IGNORE INTO research_watchers VALUES(?,?,?)',(owner,query,store))
+        task=db.execute('SELECT status,updated FROM research_tasks WHERE query=? AND store=?',(query,store)).fetchone()
+        if task and (task[0] in ('queued','running') or now-task[1]<(60 if force else 900)):
+            continue
+        db.execute("INSERT OR REPLACE INTO research_tasks(query,store,requested) VALUES(?,?,?)",(query,store,now))
+    db.execute("DELETE FROM research_tasks WHERE query NOT IN (SELECT query FROM research_queries)")
+    db.execute("DELETE FROM research_watchers WHERE query NOT IN (SELECT query FROM research_queries)")
 
 
 def variants(query):
@@ -95,12 +113,20 @@ def public_url(url, root):
             and p.port in (None, 443) and not p.username and not p.password and len(url) <= 1600)
 
 
-def read(url, limit=8_000_000):
+def wait_for_slot(url):
     host = urlsplit(url).netloc
-    delay = 2 - (time.monotonic() - _last.get(host, 0))
-    if delay > 0:
+    while True:
+        with _rate_lock:
+            delay=2-(time.monotonic()-_last.get(host,0))
+            if delay<=0:
+                _last[host]=time.monotonic()
+                break
         time.sleep(delay)
-    _last[host] = time.monotonic()
+
+
+def read(url, limit=8_000_000):
+    wait_for_slot(url)
+    host=urlsplit(url).netloc
     with requests.get(url, headers={'User-Agent': AGENT, 'Accept-Language': 'pt-PT,es;q=0.9'},
                       timeout=(5, 18), stream=True, allow_redirects=False) as r:
         r.raise_for_status()
@@ -124,6 +150,7 @@ def read(url, limit=8_000_000):
 
 def read_redirect(url, limit):
     # One canonical same-retailer redirect, no chains or open URL fetches.
+    wait_for_slot(url)
     with requests.get(url, headers={'User-Agent': AGENT}, timeout=(5,18), stream=True, allow_redirects=False) as r:
         r.raise_for_status()
         if r.is_redirect:
@@ -181,6 +208,26 @@ def parse_page(html, store, url):
         if rows:
             found.update((o['id'], o) for o in rows)
             methods.append('retailer_tiles')
+    if store=='pingo-doce':
+        for tile in soup.select('.product-tile-pd[data-gtm-info]'):
+            try:
+                meta=json.loads(tile['data-gtm-info'])['items'][0]
+                price=tile.select_one('.product-price .sales')
+                pack=tile.select_one('.product-unit')
+                link=tile.select_one('a[href*="/home/produtos/"]')
+                image=tile.select_one('img.product-tile-component-image')
+                if not price or not pack or not link:
+                    continue
+                o=base_offer(store,meta['item_id'],meta['item_name'],price.get_text('',strip=True),pack.get_text(' ',strip=True),
+                    urljoin(ROOTS[store],link['href']),image.get('src','') if image else '',meta.get('item_brand',''))
+                badges=' '.join(e.get_text(' ',strip=True)+' '+e.get('alt','')+' '+e.get('title','')
+                    for e in tile.select('[class*="promo"],[class*="badge"],[class*="discount"]'))
+                if any(word in fold(badges) for word in ('cartao','poupa mais','cupao','so na app')):
+                    o['condition']='unknown'
+                found[o['id']]=o
+                methods.append('retailer_tiles')
+            except (ValueError,TypeError,KeyError,IndexError):
+                continue
     # ALDI renders catalogue records in public Next.js page data, including prices,
     # dates, packs and primary images even when the visible page is client rendered.
     if store.startswith('aldi-'):
@@ -314,7 +361,7 @@ def discover_urls(content, url, store):
     return list(dict.fromkeys(result))[:400]
 
 
-def run_research(app, report, queries=None, per_store=6, stores=None):
+def run_research(app, report, queries=None, per_store=12, stores=None):
     """Incremental crawler: at most a small page budget per chain per pass.
 
     A persistent frontier rotates through the catalogue; product words move matching
@@ -349,6 +396,7 @@ def run_research(app, report, queries=None, per_store=6, stores=None):
                 continue
         state=dict(store=store,status='researching',checked_at=datetime.now(timezone.utc).isoformat(),
                    count=0,methods=[],failures=old.get('failures',0),retry_at=0,errors=[],query_cursor=old.get('query_cursor',0))
+        pages_read=0
         try:
             rules=robots(root)
             seeds=[s['url'] for s in CATEGORY_SOURCES if s['store']==store]+SEEDS.get(store,[])
@@ -362,7 +410,11 @@ def run_research(app, report, queries=None, per_store=6, stores=None):
                         db.execute('INSERT OR IGNORE INTO research_urls(store,url,kind) VALUES(?,?,?)',(store,url,kind))
                 pending=[dict(r) for r in db.execute('SELECT * FROM research_urls WHERE store=? AND next_check<=? LIMIT 200000',(store,now))]
             if not pending:
-                report(dict(old,store=store,cached=True,status=old.get('status','discovering')))
+                with app.database() as db:
+                    next_due=db.execute('SELECT MIN(next_check) FROM research_urls WHERE store=?',(store,)).fetchone()[0]
+                    old.update(store=store,status=old.get('status','discovering'),retry_at=max(now+900,next_due or now+86400))
+                    db.execute('INSERT OR REPLACE INTO research_sources VALUES(?,?)',(store,json.dumps(old)))
+                report(dict(old,cached=True))
                 continue
             pending.sort(key=prioritise)
             visited=set()
@@ -387,6 +439,7 @@ def run_research(app, report, queries=None, per_store=6, stores=None):
                     if not rules.can_fetch('Despensa',url):
                         raise ValueError('robots_restricted')
                     content=read(url,32_000_000 if entry['kind']=='sitemap' else 8_000_000)
+                    pages_read+=1
                     new_urls=discover_urls(content,url,store)
                     offers,methods=([],['official_sitemap']) if entry['kind']=='sitemap' else parse_page(content,store,url)
                     state['methods']=sorted(set(state['methods']+methods))
@@ -417,7 +470,7 @@ def run_research(app, report, queries=None, per_store=6, stores=None):
                     if blocked:
                         break  # No retry storm or identity rotation against access blocks.
                 report(dict(state))
-            state['status']='ok' if state['count'] else 'discovering' if state['methods'] else 'unavailable'
+            state['status']='ok' if state['count'] else 'discovering' if pages_read else 'unavailable'
             if state['errors'] and state['count']:
                 state['status']='partial'
         except Exception as error:
@@ -435,3 +488,114 @@ def run_research(app, report, queries=None, per_store=6, stores=None):
             state['catalogue_count']=db.execute("SELECT COUNT(*) FROM offers WHERE store=? AND user_id=''",(store,)).fetchone()[0]
             db.execute('INSERT OR REPLACE INTO research_sources VALUES(?,?)',(store,json.dumps(state)))
         report(state)
+
+
+def query_progress(db, query, stores, owner):
+    """Only the requested query's public source status is returned to the caller."""
+    query=fold(query)[:120]
+    rows=[dict(r) for r in db.execute('''SELECT t.store,t.status,t.found,t.error,t.next_check FROM research_tasks t
+        JOIN research_watchers w ON w.query=t.query AND w.store=t.store WHERE t.query=? AND w.user_id=?''',(query,owner)) if r['store'] in stores]
+    return dict(sources=rows,pending=sum(r['status'] in ('queued','running','waiting') for r in rows),
+                finished=sum(r['status'] in ('done','partial','unavailable') for r in rows),total=len(rows))
+
+
+def search_store(app, task, page_limit=6):
+    """Give an explicit search its own bounded work, independent of catalogue sweeps."""
+    from searching import rank, STOPWORDS
+    store,query=task['store'],task['query']
+    now=time.time()
+    with app.database() as db:
+        row=db.execute('SELECT data FROM research_sources WHERE store=?',(store,)).fetchone()
+        source=json.loads(row[0]) if row else {}
+    if source.get('status')=='unavailable' and source.get('retry_at',0)>now and source.get('errors'):
+        return dict(status='unavailable',found=0,error=source['errors'][0],next_check=source['retry_at'])
+    try:
+        root=ROOTS[store];rules=robots(root)
+        hints=sorted({part for w in variants(query) if len(w)>=3 and w not in STOPWORDS for part in (w[:3],w[-3:])})
+        clause=' AND ('+' OR '.join('url LIKE ?' for _ in hints)+')' if hints else ''
+        with app.database() as db:
+            entries=[dict(r) for r in db.execute("SELECT * FROM research_urls WHERE store=? AND kind!='sitemap' AND next_check<=?"+clause,
+                (store,now,*('%'+w+'%' for w in hints)))]
+        choices=[]
+        for entry in entries:
+            label=unquote(urlsplit(entry['url']).path).replace('-',' ')
+            leaf=label.rsplit('/',1)[-1]
+            relevance=10*rank(query,leaf)+rank(query,label)
+            if relevance:
+                choices.append((relevance,entry))
+        if not choices:
+            for entry in entries:
+                label=unquote(urlsplit(entry['url']).path).replace('-',' ')
+                relevance=rank(query,label,fuzzy=True)
+                if relevance:
+                    choices.append((relevance,entry))
+        choices.sort(key=lambda r:(-r[0],r[1]['checked']))
+        if not choices:
+            # Discovery may still be running for a new installation or retailer.
+            waiting=not source.get('indexed') and now-task['requested']<1800
+            return dict(status='waiting' if waiting else 'done',found=0,
+                        error='indexing' if waiting else 'no_candidates',next_check=now+300 if waiting else 0)
+        found=0;errors=[];methods=set()
+        for _,entry in choices[:page_limit]:
+            url=entry['url']
+            if not rules.can_fetch('Despensa',url):
+                errors.append('robots_restricted')
+                continue
+            try:
+                content=read(url)
+                offers,used=parse_page(content,store,url)
+                methods.update(used)
+                observed=datetime.now(timezone.utc).isoformat()
+                with app.database() as db:
+                    for o in offers:
+                        o['observed_at']=observed
+                        db.execute('INSERT OR REPLACE INTO offers VALUES(?,?,?,?)',(o['id'],'',store,json.dumps(o)))
+                        db.execute('INSERT OR REPLACE INTO history VALUES(?,?,?)',(o['id'],observed,o['price_cents']))
+                    db.execute('UPDATE research_urls SET checked=?,next_check=?,failures=0 WHERE store=? AND url=?',(time.time(),time.time()+21600,store,url))
+                found+=len(offers)
+            except Exception as error:
+                blocked=isinstance(error,requests.HTTPError) and error.response.status_code in (401,403,429)
+                errors.append('access_restricted' if blocked else 'source_unavailable')
+                with app.database() as db:
+                    failures=entry['failures']+1
+                    db.execute('UPDATE research_urls SET checked=?,next_check=?,failures=? WHERE store=? AND url=?',
+                        (time.time(),time.time()+retry_delay(failures),failures,store,url))
+                if blocked:
+                    break
+        if found:
+            with app.database() as db:
+                latest=db.execute('SELECT data FROM research_sources WHERE store=?',(store,)).fetchone()
+                source=json.loads(latest[0]) if latest else source
+                source.update(store=store,status='partial' if errors else 'ok',failures=0,
+                    checked_at=datetime.now(timezone.utc).isoformat(),methods=sorted(set(source.get('methods',[]))|methods),
+                    catalogue_count=db.execute("SELECT COUNT(*) FROM offers WHERE store=? AND user_id=''",(store,)).fetchone()[0])
+                db.execute('INSERT OR REPLACE INTO research_sources VALUES(?,?)',(store,json.dumps(source)))
+        return dict(status='partial' if found and errors else 'done' if found or not errors else 'unavailable',
+                    found=found,error=errors[0] if errors else '',next_check=time.time()+900 if errors else 0)
+    except Exception:
+        return dict(status='unavailable',found=0,error='source_unavailable',next_check=time.time()+900)
+
+
+def priority_worker(app, stop=None):
+    """Two small independent workers make interactive searches progress promptly."""
+    stop=stop or threading.Event()
+    while not stop.is_set():
+        try:
+            with app.database() as db:
+                db.execute('BEGIN IMMEDIATE')
+                db.execute("UPDATE research_tasks SET status='queued' WHERE status='running' AND updated<?",(time.time()-300,))
+                row=db.execute("SELECT * FROM research_tasks WHERE status IN ('queued','waiting') AND next_check<=? ORDER BY requested DESC,store LIMIT 1",(time.time(),)).fetchone()
+                task=dict(row) if row else None
+                if task:
+                    db.execute("UPDATE research_tasks SET status='running',updated=? WHERE query=? AND store=?",(time.time(),task['query'],task['store']))
+            if not task:
+                stop.wait(2)
+                continue
+            result=search_store(app,task)
+            with app.database() as db:
+                db.execute('UPDATE research_tasks SET status=?,updated=?,next_check=?,found=?,error=? WHERE query=? AND store=?',
+                    (result['status'],time.time(),result['next_check'],result['found'],result['error'],task['query'],task['store']))
+        except Exception:
+            import logging
+            logging.exception('Priority research failed')
+            stop.wait(5)

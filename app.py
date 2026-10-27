@@ -81,6 +81,7 @@ def create_app(data_dir=None, testing=False):
         from research import setup
         setup(db)
         db.execute('PRAGMA journal_mode=WAL')
+        db.execute("UPDATE research_tasks SET status='queued' WHERE status='running'")
         # A process restart must not strand an interrupted refresh indefinitely.
         db.execute("UPDATE jobs SET status='interrupted',finished=? WHERE status='running'", (utcnow(),))
 
@@ -186,7 +187,7 @@ def create_app(data_dir=None, testing=False):
     def health():
         with database() as db:
             db.execute('SELECT 1')
-        return jsonify(ok=True, app='Despensa', version='0.2.0')
+        return jsonify(ok=True, app='Despensa', version='0.3.0')
 
     login_attempts = {}
     login_lock = threading.Lock()
@@ -371,7 +372,7 @@ def create_app(data_dir=None, testing=False):
                 raise ValueError('Limite de 300 produtos por mês')
             db.execute('INSERT INTO items VALUES(?,?,?,?)', (iid, g.user['id'], month_arg(d.get('month')), json.dumps(item)))
             from research import request_query
-            request_query(db, item['query'])
+            request_query(db, item['query'],owner=g.user['id'])
         return jsonify(item=dict(item, id=iid)), 201
 
     @app.route('/api/items/<iid>', methods=['PATCH', 'DELETE'])
@@ -388,7 +389,7 @@ def create_app(data_dir=None, testing=False):
             db.execute('UPDATE items SET data=? WHERE id=? AND user_id=?', (json.dumps(item), iid, g.user['id']))
             if any(k in request.get_json() for k in ('name', 'query', 'family')):
                 from research import request_query
-                request_query(db, item['query'])
+                request_query(db, item['query'],owner=g.user['id'])
         return jsonify(item=dict(item, id=iid))
 
     @app.post('/api/items/copy')
@@ -418,17 +419,49 @@ def create_app(data_dir=None, testing=False):
     @require_user
     def offers():
         p = profile(g.user['id'])
-        words = product_text(request.args.get('q', '')[:120]).split()
-        if words:
-            from research import request_query
-            with database() as db:
-                request_query(db, ' '.join(words))
+        query = product_text(request.args.get('q', '')[:120])
         store = request.args.get('store', '')
-        found = [o for o in get_offers(g.user['id']) if all(w in product_text(o['name']).split() for w in words)
-            and o['country'] in p['countries'] and (not store or o['store'] == store)]
-        found.sort(key=lambda o: (o['price_cents'] / o['size'] if o.get('size') else 1e9, o['name']))
+        country=request.args.get('country','profile')
+        countries=['PT','ES'] if country=='all' else [country] if country in ('PT','ES') else p['countries']
+        stores=[sid for sid,s in STORE_MAP.items() if s['country'] in countries and (not store or sid==store)]
+        from research import request_query, query_progress
+        with database() as db:
+            if query and request.args.get('investigate','true')!='false':
+                request_query(db,query,stores=stores,owner=g.user['id'])
+            progress=query_progress(db,query,stores,g.user['id']) if query else dict(sources=[],pending=0,total=0,finished=0)
+        from searching import find
+        found, approximate=find([o for o in get_offers(g.user['id']) if o['country'] in countries and (not store or o['store']==store)],query)
         from products import comparisons
-        return jsonify(offers=found[:200], comparisons=comparisons(found[:300], p), total=len(found), observed_only=True)
+        comparison_profile=p
+        if country!='profile':
+            comparison_profile=dict(p,countries=countries,stores={sid:dict(v,enabled=True) for sid,v in p['stores'].items()})
+        groups=comparisons(found,comparison_profile)
+        if query:
+            ranks={o['id']:i for i,o in enumerate(found)}
+            groups.sort(key=lambda group:min(ranks[o['id']] for o in group['offers']))
+        offset=max(0,int(request.args.get('offset',0)))
+        limit=max(1,min(60,int(request.args.get('limit',30))))
+        page=groups[offset:offset+limit]
+        return jsonify(offers=[o for group in page for o in group['offers']],comparisons=page,total=len(found),group_total=len(groups),
+            has_more=offset+limit<len(groups),next_offset=offset+len(page),research=progress,
+            approximate=approximate,observed_only=True)
+
+    @app.post('/api/research/search')
+    @require_user
+    def research_search():
+        d=request.get_json()
+        query=product_text(str(d.get('q',''))[:120])
+        if len(query)<3:
+            raise ValueError('Escreva pelo menos três caracteres')
+        p=profile(g.user['id'])
+        country=d.get('country','profile')
+        countries=['PT','ES'] if country=='all' else [country] if country in ('PT','ES') else p['countries']
+        stores=[sid for sid,s in STORE_MAP.items() if s['country'] in countries and (not d.get('store') or sid==d['store'])]
+        from research import request_query,query_progress
+        with database() as db:
+            request_query(db,query,stores=stores,force=True,owner=g.user['id'])
+            result=query_progress(db,query,stores,g.user['id'])
+        return jsonify(research=result),202
 
     @app.get('/api/research')
     @require_user
@@ -753,8 +786,7 @@ def worker(app, stop=None):
                 last_time = datetime.fromisoformat(last['created']).timestamp() if last else 0
                 due_retry = any(s.get('status') == 'unavailable' and s.get('retry_at',0) <= time.time() for s in sources)
                 due_discovery = any(s.get('remaining',0) and s.get('retry_at',0) <= time.time() for s in sources)
-                new_query = requested > last_time and time.time() - requested >= 3
-                if active and (new_query or due_retry or due_discovery or time.time() - last_time >= min(active) * 3600):
+                if active and (due_retry or due_discovery or time.time() - last_time >= min(active) * 3600):
                     enqueue_refresh(app, internal=True)
         except Exception:
             logging.exception('Worker error')
@@ -766,4 +798,7 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     app = create_app()
     threading.Thread(target=worker, args=(app,), daemon=True).start()
+    from research import priority_worker
+    for _ in range(2):
+        threading.Thread(target=priority_worker,args=(app,),daemon=True).start()
     serve(app, host=os.environ.get('DESPENSA_HOST', '0.0.0.0'), port=int(os.environ.get('DESPENSA_PORT', '8108')), threads=8)

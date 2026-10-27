@@ -9,7 +9,7 @@ import requests
 _cache = {}
 _lock = threading.Lock()
 _last_geocode = 0.0
-HEADERS = {'User-Agent': 'Despensa/0.2 (+https://github.com/hubertdungen/Despensa; self-hosted grocery planner)'}
+HEADERS = {'User-Agent': 'Despensa/0.3 (+https://github.com/hubertdungen/Despensa; self-hosted grocery planner)'}
 
 
 def geocode(query):

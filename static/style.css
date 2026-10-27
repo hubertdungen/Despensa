@@ -1928,3 +1928,7 @@ dialog::backdrop {
 
 .research-details {margin: 16px 0; padding: 14px 18px; border: 1px solid var(--line); border-radius: 14px;}
 .research-details .source-row small {display: block;}
+
+.catalog-status { display:flex; flex-wrap:wrap; gap:8px 24px; justify-content:space-between; margin:16px 0; color:var(--muted); font-size:13px; }
+.catalog-status span { display:inline-flex; align-items:center; gap:6px; }
+.catalog-more { display:flex; justify-content:center; margin:24px 0; }

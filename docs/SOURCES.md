@@ -1,14 +1,16 @@
 # Fontes, cobertura e metodologia
 
-## Radar automático ibérico (0.2)
+## Radar automático ibérico (0.3)
 
-A investigação é automática para os produtos da lista e as palavras pesquisadas. `research.py` contém o registo de fontes, os métodos alternativos e a fila persistente; `catalog.py` mantém os formatos e conectores específicos. Há fontes configuradas para as principais cadeias portuguesas e espanholas, incluindo lojas profissionais. O estado de cada fonte aparece no radar: programada, a investigar, com preços, a descobrir páginas, parcialmente disponível ou com nova tentativa prevista.
+A investigação é automática para os produtos da lista e as palavras pesquisadas. A pesquisa considera nomes, marcas, formatos, plurais, prefixos e grafias próximas quando não há correspondência exata. Portugal/Espanha são selecionáveis na pesquisa. Os grupos completos são calculados antes de paginar, sem limitar a comparação aos primeiros 300 preços.
 
-Uma passagem não equivale a recolher uma loja inteira. O orçamento inicial é de seis páginas por cadeia por passagem, no máximo duas de mapas do site. As páginas ainda não visitadas ficam na base de dados. A prioridade reconhece palavras portuguesas/espanholas e reparte as consultas pelos produtos pedidos; não favorece para sempre um único termo. A descoberta continua entre atualizações de preços. O limite de segurança da fila é de 200 mil URLs por cadeia.
+As pesquisas interativas têm uma fila persistente própria, processada por dois workers independentes da recolha geral, até seis páginas relevantes por loja. Uma pesquisa nova pode consultar páginas de produto ainda não visitadas mesmo durante a espera normal da recolha geral. Respeita os bloqueios e intervalos de espera de fontes que falharam. Os pedidos das três tarefas partilham o limite de dois segundos por domínio. O navegador consulta o progresso a cada três segundos, apenas enquanto há pesquisa pendente e a vista está aberta. `research.py` contém o registo de fontes, os métodos alternativos e a fila persistente; `catalog.py` mantém os formatos e conectores específicos. Há fontes configuradas para as principais cadeias portuguesas e espanholas, incluindo lojas profissionais. O estado de cada fonte aparece no radar: programada, a investigar, com preços, a descobrir páginas, parcialmente disponível ou com nova tentativa prevista.
+
+Uma passagem não equivale a recolher uma loja inteira. O orçamento inicial é de 12 páginas por cadeia por passagem, no máximo duas de mapas do site. As páginas ainda não visitadas ficam na base de dados. A prioridade reconhece palavras portuguesas/espanholas e reparte as consultas pelos produtos pedidos; não favorece para sempre um único termo. A descoberta continua entre atualizações de preços. O limite de segurança da fila é de 200 mil URLs por cadeia.
 
 ### Métodos complementares
 
-1. Leitura do preço apresentado nas páginas de categoria, quando existe um formato identificado (Continente/Auchan).
+1. Leitura do preço apresentado nas páginas de categoria, quando existe um formato identificado (Continente, Auchan e Pingo Doce).
 2. JSON-LD `Product/Offer` publicado pela própria loja em páginas de produto.
 3. Dados de catálogo embebidos na página, incluindo o catálogo ALDI em Next.js: preço, formato, datas e disponibilidade.
 4. Microdados de produto quando o JSON-LD falta ou não pode ser interpretado.
@@ -33,7 +35,7 @@ O repositório distribui software, não uma base de dados comercial das lojas. P
 
 ## Correspondência e custo
 
-As sugestões reconhecem famílias conservadoras. Leite magro, meio gordo, sem lactose, fresco e biológico são separados quando a informação está presente. Palavras frequentes são normalizadas entre português e espanhol. Famílias não reconhecidas ficam como referências individuais. Não há certificação de equivalência nutricional ou de qualidade entre marcas.
+As sugestões reconhecem famílias conservadoras. Leite magro, meio gordo, sem lactose, fresco e biológico são separados quando a informação está presente. Palavras frequentes são normalizadas entre português e espanhol. Famílias não reconhecidas podem ser agrupadas por EAN/GTIN com dígito de controlo válido, unidade e conteúdo da embalagem iguais. Sem essa informação ficam como referências individuais. Não há certificação de equivalência nutricional ou de qualidade entre marcas.
 
 Uma referência específica pode ser fixada. Uma lista genérica procura alternativas pelas palavras/família escolhidas. Para kg/l/un, o custo é `ceil(quantidade / conteúdo da embalagem) × preço da embalagem`: uma unidade mais barata não implica necessariamente um cabaz mais barato. O histórico guarda preços observados, sem inventar preços anteriores.
 

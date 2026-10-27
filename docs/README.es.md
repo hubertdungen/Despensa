@@ -14,9 +14,10 @@ docker compose up -d --build
 
 Abra `http://IP-DEL-SERVIDOR:8108` y cree una cuenta local, o configure entrada directa con Authelia. Los datos quedan en un volumen Docker. Para instalar en el teléfono y usar la lista sin conexión, necesita **HTTPS válido**. En Android/PC, use la instalación del navegador; en iPhone, **Compartir → Añadir a pantalla de inicio**. Los instaladores `.exe` y `.apk` todavía están pendientes.
 
-## Funciones actuales (0.2)
+## Funciones actuales (0.3)
 
 - Listas mensuales privadas, cantidades, notas, fechas y repetición del mes anterior. Modo de compra y cambios offline que se sincronizan con una sesión válida.
+- Investigación prioritaria al añadir o buscar productos, independiente de la recogida general. Busca también marcas, plurales, prefijos y pequeños errores de escritura; permite elegir Portugal/España y cargar más resultados. El progreso y los precios nuevos aparecen sin recargar la página.
 - Investigación automática al añadir o buscar productos. Vocabulario ibérico para palabras como leche/leite y aceite/azeite; sugerencias de familias con alternativas de varias tiendas.
 - Varios métodos de lectura: catálogos, JSON-LD, datos de producto embebidos, microdatos y descubrimiento en mapas oficiales del sitio. La cola persiste, reparte consultas entre productos y continúa donde se quedó.
 - Reintentos progresivos cuando una fuente falla, conservando observaciones anteriores. El radar muestra el estado de cada cadena, métodos utilizados, páginas descubiertas y siguiente intento.

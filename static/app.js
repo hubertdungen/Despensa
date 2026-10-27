@@ -117,7 +117,7 @@ const copy = {
       "O radar investiga automaticamente produtos nas lojas de Portugal e Espanha, cruza vários métodos de recolha e volta a tentar quando uma fonte falha. Consulte o estado de cada loja.",
     noResults: "Ainda não encontrámos esse produto",
     noResultsText:
-      "Experimente outras palavras, atualize o catálogo ou registe um preço que viu na loja.",
+      "Pesquise outro nome, marca ou formato, ou volte a pesquisar nas lojas.",
     observed: "Visto",
     source: "Ver na loja",
     history: "Histórico",
@@ -331,7 +331,7 @@ const copy = {
       "El radar investiga automáticamente productos en tiendas de Portugal y España, combina varios métodos de recogida y reintenta cuando una fuente falla. Consulte el estado de cada tienda.",
     noResults: "Todavía no encontramos ese producto",
     noResultsText:
-      "Pruebe otras palabras, actualice el catálogo o registre un precio de la tienda.",
+      "Busque otro nombre, marca o formato, o vuelva a buscar en las tiendas.",
     observed: "Visto",
     source: "Ver en la tienda",
     history: "Historial",
@@ -502,6 +502,12 @@ const state = {
   plan: null,
   search: "",
   storeFilter: "",
+  countryFilter: "all",
+  catalogOffset: 0,
+  catalogHasMore: false,
+  catalogTotal: 0,
+  catalogApproximate: false,
+  queryResearch: null,
   shopping: false,
   registering: false,
   offline: false,
@@ -634,7 +640,7 @@ function render() {
     ["queued", "running"].includes(j.status),
   );
   $("#app").innerHTML =
-    `<div class="shell"><aside class="sidebar"><a class="brand" href="/"><img src="/logo.svg" alt=""><div><strong>despensa<span>.</span></strong><span>${t("tagline")}</span></div></a>${nav()}<div class="side-note">${icon("leaf", "sprout")}<strong>${t("greeting")}</strong><p>${t("intro")}</p></div><div class="side-foot"><span class="dot"></span> Portugal & España <span>·</span> v0.2</div></aside><div class="workspace"><header class="topbar"><div class="breadcrumb">Despensa ${icon("chevron")}<b>${t(state.view)}</b></div><a class="mobile-brand" href="/"><img src="/logo.svg" alt="">despensa.</a><div class="top-actions"><span class="top-date">${new Date().toLocaleDateString(locale, { day: "numeric", month: "long" })}</span><button class="quiet small" data-action="refresh" title="${t("refresh")}" aria-label="${t("refresh")}" ${active ? "disabled" : ""}>${icon("refresh", active ? "spinner" : "")}<span class="refresh-label">${t(active ? "updating" : "refresh")}</span></button><button class="avatar" data-view="profile" title="${esc(state.user.username)}" aria-label="${t("profile")}">${esc(state.user.username.slice(0, 2).toUpperCase())}</button></div></header>${state.offline || readQueue().length ? `<div class="offline-banner" role="status">${state.offline ? t("offline") : `${readQueue().length} ${t("pending")}`}</div>` : ""}<main class="content" id="main">${{ list: renderList, explore: renderExplore, plan: renderPlan, profile: renderProfile }[state.view]()}</main></div></div>${nav(true)}`;
+    `<div class="shell"><aside class="sidebar"><a class="brand" href="/"><img src="/logo.svg" alt=""><div><strong>despensa<span>.</span></strong><span>${t("tagline")}</span></div></a>${nav()}<div class="side-note">${icon("leaf", "sprout")}<strong>${t("greeting")}</strong><p>${t("intro")}</p></div><div class="side-foot"><span class="dot"></span> Portugal & España <span>·</span> v0.3</div></aside><div class="workspace"><header class="topbar"><div class="breadcrumb">Despensa ${icon("chevron")}<b>${t(state.view)}</b></div><a class="mobile-brand" href="/"><img src="/logo.svg" alt="">despensa.</a><div class="top-actions"><span class="top-date">${new Date().toLocaleDateString(locale, { day: "numeric", month: "long" })}</span><button class="quiet small" data-action="refresh" title="${t("refresh")}" aria-label="${t("refresh")}" ${active ? "disabled" : ""}>${icon("refresh", active ? "spinner" : "")}<span class="refresh-label">${t(active ? "updating" : "refresh")}</span></button><button class="avatar" data-view="profile" title="${esc(state.user.username)}" aria-label="${t("profile")}">${esc(state.user.username.slice(0, 2).toUpperCase())}</button></div></header>${state.offline || readQueue().length ? `<div class="offline-banner" role="status">${state.offline ? t("offline") : `${readQueue().length} ${t("pending")}`}</div>` : ""}<main class="content" id="main">${{ list: renderList, explore: renderExplore, plan: renderPlan, profile: renderProfile }[state.view]()}</main></div></div>${nav(true)}`;
   bind();
 }
 function renderAuth() {
@@ -749,15 +755,17 @@ function categoryName(c) {
   );
 }
 function renderExplore() {
-  return `${title("catalogTitle", "catalogSubtitle")}<div class="toolbar"><div class="search-wrap">${icon("search")}<input id="catalog-search" value="${esc(state.search)}" placeholder="${t("searchPlaceholder")}" aria-label="${t("filter")}"></div><select id="catalog-store" aria-label="${t("allStores")}"><option value="">${t("allStores")}</option>${state.stores
-    .filter((s) => state.profile.countries.includes(s.country))
+  return `${title("catalogTitle", "catalogSubtitle")}<div class="toolbar"><div class="search-wrap">${icon("search")}<input id="catalog-search" value="${esc(state.search)}" placeholder="${t("searchPlaceholder")}" aria-label="${t("filter")}"></div><select id="catalog-country" aria-label="${ft("searchCountries")}"><option value="all" ${state.countryFilter === "all" ? "selected" : ""}>Portugal + España</option><option value="PT" ${state.countryFilter === "PT" ? "selected" : ""}>Portugal</option><option value="ES" ${state.countryFilter === "ES" ? "selected" : ""}>España</option></select><select id="catalog-store" aria-label="${t("allStores")}"><option value="">${t("allStores")}</option>${state.stores
+    .filter(
+      (s) => state.countryFilter === "all" || s.country === state.countryFilter,
+    )
     .map(
       (s) =>
         `<option value="${s.id}" ${s.id === state.storeFilter ? "selected" : ""}>${esc(s.name)} · ${s.country}</option>`,
     )
     .join(
       "",
-    )}</select><button class="primary" data-action="manual">${icon("plus")}${t("manualPrice")}</button></div><div class="notice">${icon("shield")}<span>${t("coverage")}</span></div><details class="research-details"><summary>${t("sources")}</summary>${renderRadar(true)}</details><div id="catalog-results">${renderProducts()}</div>`;
+    )}</select><button class="primary" type="button" data-research-now>${icon("search")}${ft("searchShops")}</button></div><div class="notice">${icon("shield")}<span>${t("coverage")}</span></div><details class="research-details"><summary>${t("sources")}</summary>${renderRadar(true)}</details><div id="search-status" role="status" aria-live="polite">${renderSearchStatus()}</div><div id="catalog-results">${renderProducts()}</div>`;
 }
 function renderProducts() {
   return renderComparisonProducts();
@@ -936,14 +944,50 @@ async function flushQueue() {
   }
 }
 async function loadOffers() {
+  return fetchCatalog();
+}
+function catalogSignature() {
+  return JSON.stringify([
+    state.search,
+    state.storeFilter,
+    state.view === "explore" ? state.countryFilter : "profile",
+  ]);
+}
+async function fetchCatalog({
+  append = false,
+  preserve = false,
+  investigate = true,
+} = {}) {
+  const signature = catalogSignature();
+  const offset = append ? state.catalogOffset : 0;
   const r = await api(
     "/offers?q=" +
       encodeURIComponent(state.search) +
       "&store=" +
-      encodeURIComponent(state.storeFilter),
+      encodeURIComponent(state.storeFilter) +
+      "&country=" +
+      (state.view === "explore" ? state.countryFilter : "profile") +
+      "&offset=" +
+      offset +
+      "&investigate=" +
+      investigate,
   );
-  state.offers = r.offers;
-  state.comparisons = r.comparisons || [];
+  if (signature !== catalogSignature()) return;
+  const merge = (old, rows, key) =>
+    Array.from(
+      new Map([...old, ...rows].map((row) => [row[key], row])).values(),
+    );
+  const keep = (append || preserve) && state.catalogSignature === signature;
+  state.offers = keep ? merge(state.offers, r.offers, "id") : r.offers;
+  state.comparisons = keep
+    ? merge(state.comparisons, r.comparisons || [], "key")
+    : r.comparisons || [];
+  state.catalogOffset = preserve && keep ? state.catalogOffset : r.next_offset;
+  state.catalogHasMore = state.catalogOffset < r.group_total;
+  state.catalogTotal = r.total;
+  state.catalogApproximate = r.approximate;
+  state.queryResearch = r.research;
+  state.catalogSignature = signature;
   saveSnapshot();
 }
 async function loadPlan() {
@@ -1094,10 +1138,16 @@ function bind() {
   $("#catalog-search")?.addEventListener("input", (e) => {
     state.search = e.target.value;
     clearTimeout(searchOffers.timer);
-    searchOffers.timer = setTimeout(searchOffers, 300);
+    searchOffers.timer = setTimeout(searchOffers, 450);
   });
   $("#catalog-store")?.addEventListener("change", (e) => {
     state.storeFilter = e.target.value;
+    searchOffers();
+  });
+  $("#catalog-country")?.addEventListener("change", (e) => {
+    state.countryFilter = e.target.value;
+    state.storeFilter = "";
+    render();
     searchOffers();
   });
   $("#plan-day")?.addEventListener("change", (e) => {
@@ -1152,6 +1202,8 @@ async function searchOffers() {
     await loadOffers();
     if (seq === searchSeq && $("#catalog-results")) {
       $("#catalog-results").innerHTML = renderProducts();
+      if ($("#search-status"))
+        $("#search-status").innerHTML = renderSearchStatus();
       bindProducts();
       bindFeatureActions();
       $("#catalog-results")
@@ -1369,6 +1421,7 @@ setInterval(async () => {
     if (
       (previous !== JSON.stringify(status.jobs) || budgetChanged) &&
       state.view !== "profile" &&
+      state.view !== "explore" &&
       !$("#modal").open
     ) {
       await loadOffers();

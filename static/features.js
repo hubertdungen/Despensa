@@ -1,6 +1,17 @@
 /* Product comparisons, nearby branches and recorded monthly savings. */
 const featureCopy = {
   "pt-PT": {
+    exploreScope:
+      "A comparação usa os países selecionados. O plano mantém as lojas e cartões ativos no seu perfil.",
+    sameBarcode: "Mesmo código de barras e formato",
+    moreResults: "Carregar mais resultados",
+    searchCountries: "Países da pesquisa",
+    searchShops: "Pesquisar nas lojas",
+    searchResults: "produtos encontrados",
+    approximateSearch: "Incluímos grafias próximas",
+    prioritySearch: "A pesquisar nas lojas",
+    shopsChecked: "lojas consultadas",
+    shopsUnavailable: "sem resposta ou com acesso limitado",
     paidShort: "Pago",
     authMethods: "Gerir métodos de acesso no Authelia",
     authMethodsHint:
@@ -91,6 +102,17 @@ const featureCopy = {
     noGenericSubs: "A loja não tem essa condição de desconto configurada.",
   },
   "es-ES": {
+    exploreScope:
+      "La comparación usa los países seleccionados. El plan mantiene las tiendas y tarjetas activas en su perfil.",
+    sameBarcode: "Mismo código de barras y formato",
+    moreResults: "Cargar más resultados",
+    searchCountries: "Países de búsqueda",
+    searchShops: "Buscar en las tiendas",
+    searchResults: "productos encontrados",
+    approximateSearch: "Incluimos grafías similares",
+    prioritySearch: "Buscando en las tiendas",
+    shopsChecked: "tiendas consultadas",
+    shopsUnavailable: "sin respuesta o con acceso limitado",
     paidShort: "Pagado",
     authMethods: "Gestionar métodos de acceso en Authelia",
     authMethodsHint:
@@ -215,13 +237,15 @@ function renderComparisonProducts() {
     return empty(
       "noResults",
       "noResultsText",
-      `<p class="muted">${ft("researchWait")}</p>`,
+      state.queryResearch?.pending
+        ? `<p class="muted">${ft("researchWait")}</p>`
+        : "",
     );
   return `<div class="comparison-grid">${groups
     .map((group) => {
       const best =
         group.offers.find((o) => o.id === group.best_id) || group.offers[0];
-      return `<article class="comparison-card"><header><div>${offerVisual(best)}<h2>${esc(group.label)}</h2><span class="muted">${group.store_count} ${ft("inStores")}</span></div>${!group.same_reference ? `<button type="button" class="primary small" data-group="${esc(group.key)}">${icon("plus")}${ft("useFamily")}</button>` : ""}</header>${!group.same_reference ? `<p class="comparison-hint">${ft("family")}</p>` : ""}${group.saving_per_unit_cents > 0 ? `<div class="comparison-benefit"><b>${ft("saveUpTo")} ${money(group.saving_per_unit_cents)} / ${esc(group.unit)} (${group.saving_percent}%)</b><small>${ft("comparedWith")}</small></div>` : ""}<div class="comparison-rows">${group.offers
+      return `<article class="comparison-card"><header><div>${offerVisual(best)}<h2>${esc(group.label)}</h2><span class="muted">${group.store_count} ${ft("inStores")}</span></div>${!group.same_reference ? `<button type="button" class="primary small" data-group="${esc(group.key)}">${icon("plus")}${ft("useFamily")}</button>` : ""}</header>${!group.same_reference ? `<p class="comparison-hint">${ft(group.exact_reference ? "sameBarcode" : "family")}</p>` : ""}${group.saving_per_unit_cents > 0 ? `<div class="comparison-benefit"><b>${ft("saveUpTo")} ${money(group.saving_per_unit_cents)} / ${esc(group.unit)} (${group.saving_percent}%)</b><small>${ft("comparedWith")}</small></div>` : ""}<div class="comparison-rows">${group.offers
         .slice(0, 4)
         .map((o) => comparisonRow(o, group.best_id))
         .join("")}${
@@ -233,7 +257,9 @@ function renderComparisonProducts() {
           : ""
       }</div></article>`;
     })
-    .join("")}</div>`;
+    .join(
+      "",
+    )}</div>${state.catalogHasMore ? `<div class="catalog-more"><button type="button" class="quiet" data-catalog-more>${ft("moreResults")}</button></div>` : ""}`;
 }
 
 let itemSuggestionTimer;
@@ -499,6 +525,36 @@ function routeItinerary(plan) {
   return `<div class="route-itinerary"><strong>${ft("routeStops")}</strong><p>${t(plan.route.base === "work" ? "work" : "home")} → ${plan.route.stops.map((s) => esc(s.name || storeName(s.store))).join(" → ")} → ${t("home")}</p><small>${plan.route.extra_minutes} min · +${plan.extra_km} km</small></div>`;
 }
 function bindFeatureActions() {
+  $("[data-catalog-more]")?.addEventListener("click", async (e) => {
+    e.currentTarget.disabled = true;
+    try {
+      await fetchCatalog({ append: true, investigate: false });
+      $("#catalog-results").innerHTML = renderProducts();
+      bindProducts();
+      bindFeatureActions();
+    } catch (err) {
+      toast(err.message);
+      e.currentTarget.disabled = false;
+    }
+  });
+  const investigate = $("[data-research-now]");
+  if (investigate)
+    investigate.onclick = async () => {
+      if (state.search.trim().length < 3) return $("#catalog-search").focus();
+      investigate.disabled = true;
+      try {
+        await api("/research/search", "POST", {
+          q: state.search,
+          country: state.countryFilter,
+          store: state.storeFilter,
+        });
+        await searchOffers();
+      } catch (err) {
+        toast(err.message);
+      } finally {
+        investigate.disabled = false;
+      }
+    };
   $("#app")
     .querySelectorAll("[data-group]")
     .forEach(
@@ -521,6 +577,48 @@ function bindFeatureActions() {
         }),
     );
 }
+
+function renderSearchStatus() {
+  const progress = state.queryResearch;
+  const unavailable =
+    progress?.sources?.filter((s) => s.status === "unavailable").length || 0;
+  return `<div class="catalog-status"><span><b>${state.catalogTotal || 0}</b> ${ft("searchResults")}${state.catalogApproximate ? ` · ${ft("approximateSearch")}` : ""}</span>${state.search && progress?.total ? `<span>${progress.pending ? `${icon("refresh", "spinner")} ${ft("prioritySearch")} · ` : ""}${progress.finished}/${progress.total} ${ft("shopsChecked")}${unavailable ? ` · ${unavailable} ${ft("shopsUnavailable")}` : ""}</span>` : ""}</div><p class="privacy-note">${ft("exploreScope")}</p>`;
+}
+
+let catalogPolling = false;
+setInterval(async () => {
+  if (
+    catalogPolling ||
+    state.view !== "explore" ||
+    !state.user ||
+    state.offline ||
+    document.hidden ||
+    !state.queryResearch?.pending ||
+    $("#modal").open
+  )
+    return;
+  catalogPolling = true;
+  try {
+    const signature = catalogSignature();
+    const before = JSON.stringify([state.comparisons, state.queryResearch]);
+    await fetchCatalog({ preserve: true, investigate: false });
+    if (signature === catalogSignature() && state.view === "explore") {
+      if ($("#search-status"))
+        $("#search-status").innerHTML = renderSearchStatus();
+      if (
+        before !== JSON.stringify([state.comparisons, state.queryResearch]) &&
+        $("#catalog-results")
+      ) {
+        $("#catalog-results").innerHTML = renderProducts();
+        bindProducts();
+        bindFeatureActions();
+      }
+    }
+  } catch {
+  } finally {
+    catalogPolling = false;
+  }
+}, 3000);
 
 function setupManualConditions() {
   const store = $("#f-store"),

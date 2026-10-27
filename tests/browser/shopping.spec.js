@@ -89,3 +89,37 @@ test('Authelia identity opens the list directly and Rumo follows the selected mo
   await expect(page.locator('.stats')).toContainText('420,00');
   await context.close();
 });
+
+test('radar searches brands, pages all results and updates while priority research runs',async({page})=>{
+  await page.route('**/api/offers?**',async route=>{
+    const url=new URL(route.request().url());
+    const response=await route.fetch();
+    if(url.searchParams.get('q')==='Marca Radar'&&url.searchParams.get('investigate')==='false'&&url.searchParams.get('offset')==='0') {
+      const data=await response.json();
+      data.research.sources=data.research.sources.map(s=>({...s,status:'done'}));
+      data.research.finished=data.research.total;data.research.pending=0;
+      await route.fulfill({response,json:data});
+    } else await route.fulfill({response});
+  });
+  await page.goto('/');await page.locator('#auth-toggle').click();
+  await page.locator('#username').fill('radar-search-test');await page.locator('#password').fill('temporary-test-password-2026');
+  await page.locator('#auth-form button[type=submit]').click();await expect(page.locator('#quick-add')).toBeVisible();
+  await page.locator('.mobile-nav [data-view=explore]').click();
+  await expect(page.locator('#catalog-country')).toHaveValue('all');
+  await page.locator('#catalog-search').fill('Marca Radar');
+  await expect(page.locator('.comparison-card')).toHaveCount(30);
+  await expect(page.locator('#search-status')).toContainText('45');
+  await expect(page.locator('#search-status')).toContainText('A pesquisar nas lojas');
+  await page.locator('[data-catalog-more]').click();
+  await expect(page.locator('.comparison-card')).toHaveCount(45);
+  await expect(page.locator('[data-catalog-more]')).toHaveCount(0);
+  await expect(page.locator('#search-status')).not.toContainText('A pesquisar nas lojas',{timeout:10000});
+  await expect(page.locator('.comparison-card')).toHaveCount(45);
+  await expect(page.locator('#catalog-search')).toHaveValue('Marca Radar');
+  await page.locator('.comparison-card').last().locator('[data-offer]').click();
+  await expect(page.locator('#f-name')).toHaveValue('Produto revisão 44');
+  await page.locator('[data-cancel]').click();
+  await page.locator('#catalog-country').selectOption('ES');
+  await expect(page.locator('.comparison-card')).toHaveCount(0);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
+});

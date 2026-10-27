@@ -20,6 +20,11 @@ with tempfile.TemporaryDirectory(prefix='despensa-e2e-') as folder:
                     price_cents=price,condition='public',observed_at=datetime.now(timezone.utc).isoformat(),
                     vat_included=True,pack='1 l',source_url='',source_kind='automatic',location='Test fixture')
                 db.execute('INSERT INTO offers VALUES(?,?,?,?)',(o['id'],'',sid,json.dumps(o)))
+            for i in range(45):
+                o=dict(id=f'page:{i}',store='continente',country='PT',name=f'Produto revisão {i:02d}',brand='Marca Radar',
+                    size=1,unit='un',price_cents=200+i,condition='public',vat_included=True,pack='1 un',
+                    observed_at=datetime.now(timezone.utc).isoformat(),source_url='',source_kind='automatic')
+                db.execute('INSERT INTO offers VALUES(?,?,?,?)',(o['id'],'',o['store'],json.dumps(o)))
     seed(local)
     secret=root/'proxy-secret';secret.write_text('browser-test-proxy-secret-'*3)
     os.environ.update(DESPENSA_AUTH_MODE='proxy',DESPENSA_PROXY_SECRET_FILE=str(secret),

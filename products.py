@@ -3,6 +3,14 @@ from datetime import datetime, timezone
 from catalog import fold, product_text
 
 
+def valid_gtin(value):
+    value=str(value)
+    if not value.isascii() or not value.isdigit() or len(value) not in (8,12,13,14) or not int(value):
+        return False
+    total=sum(int(char)*(3 if i%2==0 else 1) for i,char in enumerate(reversed(value[:-1])))
+    return (10-total%10)%10==int(value[-1])
+
+
 def family(offer):
     text = ' ' + product_text(offer['name']) + ' '
     words = set(text.split())
@@ -41,6 +49,10 @@ def family(offer):
             integral = 'integral' if 'integral' in words else ''
             key, label, query = 'pasta:' + kind + integral, f'Massa {kind} {integral}'.strip(), f'{kind} {integral}'.strip()
     if not key:
+        gtin=offer.get('ean','')
+        if valid_gtin(gtin) and offer.get('size') and unit:
+            gtin=str(gtin).zfill(14)
+            return dict(key=f'gtin:{gtin}:{offer["size"]:g}:{unit}',label=offer['name'],query=offer['name'],unit=unit)
         return dict(key='reference:' + offer['id'], label=offer['name'], query=offer['name'], unit=unit)
     return dict(key=key + ':' + ','.join(extra) + ':' + unit, label=label + (' · biológico' if extra else ''), query=query, unit=unit)
 
@@ -63,4 +75,5 @@ def comparisons(offers, profile, day=None):
         group['saving_per_unit_cents'] = round(max(o['unit_price_cents'] for o in valid) - min(o['unit_price_cents'] for o in valid), 4) if valid else 0
         group['saving_percent'] = round(100 * group['saving_per_unit_cents'] / max(o['unit_price_cents'] for o in valid), 1) if valid else 0
         group['same_reference'] = group['key'].startswith('reference:')
+        group['exact_reference'] = group['key'].startswith('gtin:')
     return sorted(groups.values(), key=lambda g: (-g['store_count'], -g['saving_percent'], g['label']))
