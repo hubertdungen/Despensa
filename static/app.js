@@ -824,7 +824,7 @@ function openModal(head, html) {
     .forEach((b) => (b.onclick = () => $("#modal").close()));
 }
 function itemModal(item = null, offer = null, quickName = "", group = null) {
-  const d = item || {
+  const d = item ? structuredClone(item) : {
     name: group?.label || offer?.name || quickName,
     query: group?.query || offer?.name || quickName,
     quantity: offer?.size || 1,
@@ -1290,13 +1290,13 @@ async function saveProfile(e) {
       .filter(Boolean);
   }
   try {
-    await resolveRoutine(p);
+    const unresolved = await resolveRoutine(p);
     const r = await api("/profile", "PUT", p);
     state.profile = r.profile;
     locale = r.profile.locale;
     localStorage.setItem("despensa-locale", locale);
     saveSnapshot();
-    toast(t("saved"));
+    toast(unresolved.length ? ft("locationsUnresolved") : t("saved"));
     await Promise.all([loadOffers(), loadBudget(), loadSavings()]);
     render();
     loadPlan();

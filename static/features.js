@@ -93,6 +93,7 @@ const featureCopy = {
     noStores: "Sem lojas identificadas nesta zona de pesquisa.",
     straight:
       "Distâncias em linha reta; percurso rodoviário ainda indisponível.",
+    locationsUnresolved: "Moradas guardadas. Falta confirmar a localização no mapa; use Localizar para voltar a tentar.",
     distance_missing_home: "Confirme e guarde a localização de casa nas definições",
     distance_missing_work: "Confirme e guarde a localização do trabalho nas definições",
     distance_no_branch: "Ainda não foi possível localizar uma filial destas lojas nas proximidades",
@@ -235,6 +236,7 @@ const featureCopy = {
     noStores: "No hay tiendas identificadas en esta zona de búsqueda.",
     straight:
       "Distancias en línea recta; ruta por carretera todavía no disponible.",
+    locationsUnresolved: "Direcciones guardadas. Falta confirmar la ubicación en el mapa; usa Localizar para volver a intentarlo.",
     distance_missing_home: "Confirma y guarda la ubicación de casa en ajustes",
     distance_missing_work: "Confirma y guarda la ubicación del trabajo en ajustes",
     distance_no_branch: "Todavía no se ha localizado una sucursal de estas tiendas cerca",
@@ -460,10 +462,13 @@ async function loadNearby(force = false) {
   }
 }
 async function resolveRoutine(profile) {
+  const unresolved = [];
   for (const key of ["home", "work"]) {
     if (!profile[key]?.trim() || profile[key + "_coords"]) continue;
-    const r = await api("/geocode?q=" + encodeURIComponent(profile[key]));
-    if (!r.results.length) continue;
+    let r;
+    try { r = await api("/geocode?q=" + encodeURIComponent(profile[key])); }
+    catch { unresolved.push(key); continue; }
+    if (!r.results.length) { unresolved.push(key); continue; }
     const result =
       r.results.length === 1
         ? r.results[0]
@@ -495,8 +500,9 @@ async function resolveRoutine(profile) {
       profile[key] = result.label;
       profile[key + "_coords"] = result.coords;
       $("#f-" + key).value = result.label;
-    }
+    } else unresolved.push(key);
   }
+  return unresolved;
 }
 
 function referenceStoreField() {

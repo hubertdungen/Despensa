@@ -200,3 +200,18 @@ test('a background plan refresh preserves a product being typed in quick add',as
   await expect(page.locator('[data-suggestion]')).toHaveCount(2);
   await page.locator('[data-cancel]').click();
 });
+
+
+test('a failed geocoder still saves the typed address for a later retry',async({page})=>{
+  await page.route('**/api/geocode?**',route=>route.fulfill({status:502,json:{error:'Geocoder unavailable'}}));
+  await page.goto('/');await page.locator('#auth-toggle').click();
+  await page.locator('#username').fill('geocoder-retry-test');await page.locator('#password').fill('temporary-test-password-2026');
+  await page.locator('#auth-form button[type=submit]').click();await expect(page.locator('#quick-add')).toBeVisible();
+  await page.locator('.mobile-nav [data-view=profile]').click();
+  await page.locator('#f-home').fill('Casa por localizar');
+  const saved=page.waitForResponse(r=>r.url().endsWith('/api/profile')&&r.request().method()==='PUT');
+  await page.locator('#profile-form button[type=submit]').click();
+  const profile=(await(await saved).json()).profile;
+  expect(profile.home).toBe('Casa por localizar');expect(profile.home_coords).toBeNull();
+  await expect(page.locator('#toast')).toContainText('Moradas guardadas');
+});

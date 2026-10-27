@@ -52,7 +52,7 @@ A descoberta consulta separadamente as zonas de **casa e trabalho**. Localizador
 
 A zona inicial tem raio de 6 km por origem. Preservam-se até 12 candidatos de cada zona (24 no conjunto), calculando distâncias rodoviárias e o desvio trabalho→loja→casa. Cada cadeia pode fornecer até três filiais candidatas ao planeador, que considera até três paragens e a assimetria das estradas.
 
-A escolha pelo botão **Localizar** guarda imediatamente a morada e as coordenadas na conta, sem depender do botão geral Guardar. Alterar uma morada sem novas coordenadas invalida as antigas. Dados em falta são identificados no plano.
+A escolha pelo botão **Localizar** guarda imediatamente a morada e as coordenadas na conta, sem depender do botão geral Guardar. Alterar uma morada sem novas coordenadas invalida as antigas. Se o geocodificador falhar, a morada escrita continua a ser guardada e a interface pede uma nova tentativa para confirmar coordenadas. Dados em falta são identificados no plano.
 
 Geocodificação: [Nominatim](https://operations.osmfoundation.org/policies/nominatim/), ao guardar zonas ou carregar em Localizar, sem autocomplete, com cache e máximo uma consulta por segundo. Se houver ambiguidade, o utilizador escolhe o resultado. Distâncias: [OSRM](https://project-osrm.org/docs/v5.24.0/api/#table-service), cache de seis horas. Descoberta: cache de 24 h; falhas sem resultados têm espera de cinco minutos. Operadores podem configurar os próprios serviços. Dados: [© OpenStreetMap contributors](https://www.openstreetmap.org/copyright).
 
