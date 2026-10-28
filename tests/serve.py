@@ -9,6 +9,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from waitress import serve
 from app import create_app
+import nearby
+
+# Browser scenarios exercise forms and state; map-provider behaviour has its own
+# Python tests. Never send these fixture coordinates to public services.
+nearby.discover=lambda profile:dict(stores=[],status="ok" if profile.get("home_coords") or profile.get("work_coords") else "locations_required",distance_method="unavailable")
 
 with tempfile.TemporaryDirectory(prefix='despensa-e2e-') as folder:
     root=Path(folder)

@@ -217,3 +217,12 @@ def test_zero_additional_km_still_reports_total_trip_and_selects_fastest_tied_ro
     result=distance_for(['a'],matrix)
     assert result['km']==0 and result['total_km']==8 and result['base_km']==10
     assert result['stops'][0]['name']=='Fast'
+
+
+def test_unknown_travel_cost_cannot_undercut_same_coverage_with_a_known_route():
+    matrix=dict(ids={'continente':2},base='home',distances=[[0,0,1000],[0,0,1000],[1000,1000,0]],
+        durations=[[0,0,60],[0,0,60],[60,60,0]])
+    plans=make_plan([ITEM],[offer('known',price=100),offer('unknown',store='pingo-doce',price=1)],
+        default_profile(),'2026-10-25',NOW,road=matrix)['plans']
+    assert plans[0]['stores']==['continente'] and plans[0]['travel_cents'] is not None
+    assert plans[1]['stores']==['pingo-doce'] and plans[1]['travel_cents'] is None

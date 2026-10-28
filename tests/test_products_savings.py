@@ -146,3 +146,36 @@ def test_package_purchase_reference_uses_pack_count_not_kilograms(tmp_path):
     assert result.status_code==201
     assert result.json['purchase']['reference_cents']==400
     assert result.json['purchase']['savings_cents']==100
+
+
+def test_store_maps_try_an_independent_provider_and_keep_custom_endpoints_private(monkeypatch):
+    import nearby
+    monkeypatch.delenv('DESPENSA_OVERPASS_URL',raising=False)
+    calls=[]
+    class Response:
+        content=b'{}'
+        def raise_for_status(self):pass
+        def json(self):return {'elements':[{'id':1}]}
+    def get(url,**kwargs):
+        calls.append(url)
+        if 'private.coffee' in url:raise ConnectionError('Unavailable')
+        return Response()
+    monkeypatch.setattr(nearby.requests,'get',get)
+    assert nearby.map_elements('bounded query')==[{'id':1}]
+    assert len(calls)==2 and 'overpass-api.de' in calls[-1]
+    calls.clear();monkeypatch.setenv('DESPENSA_OVERPASS_URL','https://maps.example.test/api/interpreter')
+    assert nearby.map_elements('bounded query')==[{'id':1}]
+    assert calls==['https://maps.example.test/api/interpreter']
+
+
+def test_dense_chains_do_not_hide_a_nearby_pingo_doce(monkeypatch):
+    import nearby
+    nearby._cache.clear()
+    stores=[dict(id=f'c{i}',store='continente',country='PT',name=f'c{i}',coords=[.0001*i,0],address='',source='official') for i in range(30)]
+    stores.append(dict(id='pingo',store='pingo-doce',country='PT',name='Pingo Doce',coords=[.02,0],address='',source='OpenStreetMap'))
+    monkeypatch.setattr(nearby,'official_locations',lambda:stores)
+    monkeypatch.setattr(nearby,'map_elements',lambda q:[])
+    monkeypatch.setattr(nearby,'table',lambda points: (_ for _ in ()).throw(ConnectionError('No road service')))
+    p=default_profile();p.update(home_coords=[0,0],work_coords=[.005,0])
+    result=nearby.discover(p)
+    assert any(s['store']=='pingo-doce' for s in result['stores']) and len(result['stores'])==24

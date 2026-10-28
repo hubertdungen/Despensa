@@ -12,6 +12,24 @@ _cache = {}
 _lock = threading.Lock()
 
 
+def map_elements(query):
+    configured=os.environ.get('DESPENSA_OVERPASS_URL')
+    endpoints=[configured] if configured else ['https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter']
+    for endpoint in endpoints:
+        try:
+            response=requests.get(endpoint,params={'data':query},headers=HEADERS,timeout=(4,12))
+            response.raise_for_status()
+            if len(response.content)>3_000_000:
+                raise ValueError('Pesquisa de lojas demasiado grande')
+            data=response.json()
+            if not isinstance(data,dict) or not isinstance(data.get('elements'),list) or data.get('remark'):
+                raise ValueError('Resposta de mapas incompleta')
+            return data['elements']
+        except (requests.RequestException,ValueError,ConnectionError):
+            continue
+    raise ValueError('Serviços de mapas indisponíveis')
+
+
 def haversine(a, b):
     lon1, lat1, lon2, lat2 = map(math.radians, [*a, *b])
     h = math.sin((lat2-lat1)/2)**2 + math.cos(lat1)*math.cos(lat2)*math.sin((lon2-lon1)/2)**2
@@ -53,17 +71,13 @@ def discover(profile):
         failed=False
         for country in osm_countries:
             clauses = ''.join(f'nwr(area.search)(around:{radius},{p[1]},{p[0]})["shop"~"^(supermarket|wholesale|convenience)$"];' for p in points)
-            query = f'[out:json][timeout:18];area["ISO3166-1"="{country}"]["admin_level"="2"]->.search;({clauses});out center tags 250;'
+            query = f'[out:json][timeout:10];area["ISO3166-1"="{country}"]["admin_level"="2"]->.search;({clauses});out center tags 250;'
             try:
-                response = requests.get(os.environ.get('DESPENSA_OVERPASS_URL', 'https://overpass.private.coffee/api/interpreter'),
-                    params={'data':query},headers=HEADERS,timeout=(4,18))
-                response.raise_for_status()
-                if len(response.content)>3_000_000:
-                    raise ValueError('Pesquisa de lojas demasiado grande')
+                elements=map_elements(query)
             except Exception:
                 failed=True
                 continue
-            for element in response.json().get('elements', []):
+            for element in elements:
                 tags = element.get('tags', {})
                 coords = element.get('center', element)
                 if 'lat' not in coords or 'lon' not in coords:
@@ -78,11 +92,19 @@ def discover(profile):
                     opening_hours=tags.get('opening_hours',''),
                     home_km=round(haversine(origins[0],point),2) if origins[0] else None,
                     work_km=round(haversine(origins[1],point),2) if origins[1] else None))
-        # Preserve the closest branches of BOTH origins before imposing a bound.
+        # Keep at least one nearby branch per chain before filling remaining
+        # places around both origins. Dense chains must not crowd out the rest.
         selected = {}
-        for axis in ('home_km', 'work_km'):
-            for store in sorted((s for s in stores if s[axis] is not None), key=lambda s:s[axis])[:12]:
-                selected[store['id']] = store
+        closest=lambda s:min(x for x in (s['home_km'],s['work_km']) if x is not None)
+        chains=set()
+        for store in sorted(stores,key=closest):
+            if store['store'] not in chains:
+                chains.add(store['store']);selected[store['id']]=store
+        ranked=[sorted((s for s in stores if s[axis] is not None),key=lambda s:s[axis]) for axis in ('home_km','work_km')]
+        for i in range(24):
+            for candidates in ranked:
+                if i<len(candidates) and len(selected)<24:
+                    selected[candidates[i]['id']]=candidates[i]
         stores = list(selected.values())[:24]
         method = 'straight_line'
         try:

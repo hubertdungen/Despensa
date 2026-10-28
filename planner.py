@@ -147,7 +147,9 @@ def make_plan(items, offers, prefs, day, now=None, road=None):
                 total_cents=basket + travel if travel is not None else basket,
                 extra_km=km, route=route, distance_method='road' if route else 'unavailable', balance_cents=sum(c['balance_cents'] for c in found)))
     # Never rank a partially priced basket ahead of a fully covered one.
-    plans.sort(key=lambda p: (-p['coverage'], p['total_cents'], len(p['stores'])))
+    # An unknown journey cost cannot undercut a fully costed basket. Keep those
+    # alternatives visible, after plans with the same coverage and a road route.
+    plans.sort(key=lambda p: (-p['coverage'], p['travel_cents'] is None, p['total_cents'], len(p['stores'])))
     return dict(plans=plans[:12], missing=missing, pending=len(pending), day=day,
         comparison='keyword_suggestions', distance_method='road' if road else 'unavailable',
         warning='Confirme marca, tipo, formato e disponibilidade na loja. Percursos por estrada calculados a partir de casa e trabalho; sem resposta do serviço, a deslocação fica por confirmar.')
