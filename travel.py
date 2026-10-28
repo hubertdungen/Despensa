@@ -25,6 +25,12 @@ def validate(data,current=None,folder=None):
         if value is not None and (not math.isfinite(value) or not low<=value<=high):raise ValueError('Valor inválido: '+key)
         if value is None and key in ('parking_per_stop','tolls','stop_minutes','time_value'):raise ValueError('Valor necessário: '+key)
         result[key]=value
+    previous=(current or {}).get('fuel',defaults()['fuel'])
+    if result['fuel']!=previous and 'consumption_source' not in data:result['consumption_source']='manual'
+    if (result['fuel']=='electric')!=(previous=='electric'):
+        # A litre-based value cannot silently become a kWh-based value.
+        for key in ('consumption','unit_price'):
+            if key not in data:result[key]=None
     result['transit_pass']=bool(data.get('transit_pass',result['transit_pass']))
     identifier=str(data.get('vehicle_id',result['vehicle_id']))[:100]
     result['vehicle_label']=str(data.get('vehicle_label',result['vehicle_label']))[:160]

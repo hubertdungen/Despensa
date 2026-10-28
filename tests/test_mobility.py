@@ -276,3 +276,11 @@ def test_fuel_quote_is_not_presented_as_used_when_manual_km_fallback_priced_the_
     p=default_profile();p['mobility']['fuel_quote']=dict(unit_price=1.8)
     result=travel.estimate(p,dict(total_km=10,km=0,total_minutes=20),1)
     assert result['travel_method']=='manual_km' and result['fuel_quote'] is None
+
+
+def test_switching_between_litres_and_kwh_requires_new_consumption_and_price():
+    previous=dict(travel.defaults(),consumption=6,unit_price=1.8)
+    electric=travel.validate(dict(fuel='electric'),previous)
+    assert electric['consumption'] is None and electric['unit_price'] is None
+    explicit=travel.validate(dict(fuel='electric',consumption=17,unit_price=.2,price_mode='manual'),previous)
+    assert explicit['consumption']==17 and explicit['unit_price']==.2

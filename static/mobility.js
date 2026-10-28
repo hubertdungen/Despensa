@@ -1,7 +1,7 @@
 /* Car profiles, explicit shopping trips, progress and saved branch selection. */
 const mobilityCopy = {
   'pt-PT': {
-    savingSettings:'A guardar definições…',shop:'loja',connectionTimes:'Ligações e horários',travelTotal:'Deslocação estimada',otherPlans:'Ver outras alternativas',fewerPlans:'Mostrar só a melhor por número de lojas',advancedTrip:'Custos e tempo nas lojas',bestWithTime:'Melhor equilíbrio entre custo e tempo',journeyTitle:'Onde compensa comprar?',journeySubtitle:'Compare as compras com o custo da viagem e o tempo em cada loja.',
+    savingSettings:'A guardar definições…',shop:'loja',connectionTimes:'Ligações e horários',manualConsumption:'Consumo indicado por si',travelTotal:'Deslocação estimada',otherPlans:'Ver outras alternativas',fewerPlans:'Mostrar só a melhor por número de lojas',advancedTrip:'Custos e tempo nas lojas',bestWithTime:'Melhor equilíbrio entre custo e tempo',journeyTitle:'Onde compensa comprar?',journeySubtitle:'Compare as compras com o custo da viagem e o tempo em cada loja.',
     vehicleSettings:'Como se desloca',car:'Carro',transit:'Transportes públicos',mode:'Meio de transporte',
     vehicleQuery:'Pesquisar marca, modelo e motorização',vehicleYear:'Ano exato (opcional)',vehicleYearHint:'Com ano, a pesquisa alternativa usa o catálogo EPA dos EUA. Sem ano, usa o catálogo europeu ADEME; confirme a geração.',
     vehicleSearch:'Procurar carro',vehicleLabel:'O meu carro',consumption:'Consumo médio por 100 km',consumptionHint:'Pode substituir o valor de homologação pelo consumo real do seu carro.',
@@ -32,7 +32,7 @@ const mobilityCopy = {
     perBoarding:'por embarque',boardings:'embarques',walking:'A pé',min:'min',selectedAt:'Escolhido às',checking:'A confirmar…'
   },
   'es-ES': {
-    savingSettings:'Guardando preferencias…',shop:'tienda',connectionTimes:'Conexiones y horarios',travelTotal:'Desplazamiento estimado',otherPlans:'Ver otras alternativas',fewerPlans:'Mostrar solo la mejor por número de tiendas',advancedTrip:'Costes y tiempo en las tiendas',bestWithTime:'Mejor equilibrio entre coste y tiempo',journeyTitle:'¿Dónde compensa comprar?',journeySubtitle:'Compara la compra con el coste del viaje y el tiempo en cada tienda.',
+    savingSettings:'Guardando preferencias…',shop:'tienda',connectionTimes:'Conexiones y horarios',manualConsumption:'Consumo indicado por ti',travelTotal:'Desplazamiento estimado',otherPlans:'Ver otras alternativas',fewerPlans:'Mostrar solo la mejor por número de tiendas',advancedTrip:'Costes y tiempo en las tiendas',bestWithTime:'Mejor equilibrio entre coste y tiempo',journeyTitle:'¿Dónde compensa comprar?',journeySubtitle:'Compara la compra con el coste del viaje y el tiempo en cada tienda.',
     vehicleSettings:'Cómo te desplazas',car:'Coche',transit:'Transporte público',mode:'Medio de transporte',
     vehicleQuery:'Buscar marca, modelo y motorización',vehicleYear:'Año exacto (opcional)',vehicleYearHint:'Con año, la alternativa usa el catálogo EPA de EE. UU. Sin año, usa ADEME; confirma la generación.',
     vehicleSearch:'Buscar coche',vehicleLabel:'Mi coche',consumption:'Consumo medio por 100 km',consumptionHint:'Puedes sustituir la homologación por el consumo real de tu coche.',
@@ -62,7 +62,7 @@ function mobilitySettings() {
   <div class="field full" data-car-field id="vehicle-results" aria-live="polite"></div>
   <input type="hidden" id="m-vehicle_id" value="${esc(m.vehicle_id||'')}"><input type="hidden" id="m-consumption_source" value="${esc(m.consumption_source||'manual')}">
   <div class="field" data-car-field><label for="m-vehicle_label">${mt('vehicleLabel')}</label><input id="m-vehicle_label" value="${esc(m.vehicle_label||'')}"></div>
-  <div class="field" data-car-field><label for="m-consumption">${mt('consumption')}</label><input id="m-consumption" type="number" min="0.1" max="100" step="0.001" value="${m.consumption??''}"><small>${mt('consumptionHint')}</small><small id="vehicle-source">${esc(m.vehicle?.source||'')}</small></div>
+  <div class="field" data-car-field><label for="m-consumption">${mt('consumption')}</label><input id="m-consumption" type="number" min="0.1" max="100" step="0.001" value="${m.consumption??''}"><small>${mt('consumptionHint')}</small><small id="vehicle-source">${esc(m.consumption_source==='catalogue'?m.vehicle?.source||'':m.consumption!=null?mt('manualConsumption'):'')}</small></div>
   ${choices('m-fuel',['petrol95','petrol98','diesel','lpg','electric'].map(k=>[k,mt(k)]),m.fuel||'petrol95')}
   ${choices('m-priceMode',[['auto',mt('automaticPrice')],['manual',mt('manualPrice')]],m.price_mode||'auto')}
   ${choices('m-fuelCountry',[['PT','Portugal'],['ES','España']],m.fuel_country||'PT')}
@@ -92,8 +92,10 @@ function bindMobilitySettings() {
     document.querySelectorAll('[data-transit-field]').forEach(el=>el.hidden=car);
   };mode();$('#m-mode').onchange=mode;
   $('#m-vehicle_label').oninput=()=>{$('#m-vehicle_id').value='';$('#m-consumption_source').value='manual';$('#vehicle-source').textContent='';};
-  $('#m-consumption').oninput=()=>$('#m-consumption_source').value='manual';
-  $('#m-fuel').onchange=()=>{$('#m-consumption_source').value='manual';if($('#m-fuel').value==='electric'){$('#m-priceMode').value='manual';$('#fuel-preview').textContent=mt('electricPriceHint');}price();unit();};
+  const manual=()=>{$('#m-consumption_source').value='manual';$('#vehicle-source').textContent=mt('manualConsumption');};
+  $('#m-consumption').oninput=manual;
+  let previousFuel=$('#m-fuel').value;
+  $('#m-fuel').onchange=()=>{if(($('#m-fuel').value==='electric')!==(previousFuel==='electric')){$('#m-consumption').value='';$('#m-unit_price').value='';}previousFuel=$('#m-fuel').value;manual();if($('#m-fuel').value==='electric'){$('#m-priceMode').value='manual';$('#fuel-preview').textContent=mt('electricPriceHint');}price();unit();};
   $('#vehicle-search').onclick=async()=>{
     const button=$('#vehicle-search'),target=$('#vehicle-results'),form=$('#profile-form');button.disabled=true;target.textContent=mt('lookupBusy');
     try {
@@ -106,6 +108,7 @@ function bindMobilitySettings() {
         try {
           const v=(await api('/vehicles/detail?id='+encodeURIComponent(rows[+b.dataset.vehicle].id))).vehicle;
           if($('#profile-form')!==form)return;
+          if((v.fuel==='electric')!==(previousFuel==='electric'))$('#m-unit_price').value='';previousFuel=v.fuel;
           $('#m-vehicle_id').value=v.id;$('#m-vehicle_label').value=v.label;$('#m-consumption').value=v.consumption;$('#m-fuel').value=v.fuel;$('#m-consumption_source').value='catalogue';
           if(v.fuel==='electric')$('#m-priceMode').value='manual';price();unit();
           $('#vehicle-source').textContent=`${v.source} · ${v.unit}${v.source_updated_at?' · '+v.source_updated_at.slice(0,10):''}`;
@@ -151,6 +154,7 @@ function journeyBreakdown(plan) {
   const costLabel={fuel:'fuelCost',electric:'energyCost',manual_km:'manualTrip',ticket_estimate:'ticketCost',pass:'passCost'}[plan.travel_method]||'journeyUnavailable';
   return `<div class="journey-facts"><div>${icon('route')}<strong>${route?.total_km!=null?`${distanceNumber(route.total_km)} km`:route?.verified?mt('transitVerified'):mt('journeyUnavailable')}</strong><span>${mt(plan.transport_mode==='transit'&&route?.verified?'transit':'distance')}</span></div><div>${icon('clock')}<strong>${plan.total_minutes!=null?`${plan.total_minutes} ${mt('min')}`:'—'}</strong><span>${mt('allTime')}</span></div><div><strong>${plan.travel_cents!=null?money(plan.travel_cents):'—'}</strong><span>${mt('travelTotal')}</span></div></div>
   <div class="cost-breakdown"><span>${t('basket')}<b>${money(plan.basket_cents)}</b></span><span>${mt(costLabel)}<b>${plan.fuel_cents!=null?money(plan.fuel_cents):plan.travel_cents!=null?money(plan.travel_cents):'—'}</b></span>${(plan.parking_cents||plan.tolls_cents)?`<span>${mt('extraCosts')}<b>${money((plan.parking_cents||0)+(plan.tolls_cents||0))}</b></span>`:''}</div>
+  ${plan.balance_cents?`<p class="muted">${t('futureBalance')}: ${money(plan.balance_cents)}</p>`:''}
   ${plan.saving_cents>0?`<div class="trip-saving"><strong>${mt('savingsAfterTrip')}: ${money(plan.saving_cents)}</strong><small>${mt('comparedStops')} ${plan.baseline_stops} ${mt(plan.baseline_stops===1?'shop':'shops')}</small></div>`:''}
   ${plan.transport_mode==='transit'?`<p class="muted">${route?.verified?`${mt('transitVerified')} · ${route.boardings} ${mt('boardings')}`:mt('transitUnavailable')} · <a href="https://transitous.org/sources/" target="_blank" rel="noopener">${mt('transitSource')}</a></p>`:`<p class="muted">${mt(traffic)}${route?.traffic_delay_minutes?` · +${route.traffic_delay_minutes} ${mt('min')} ${mt('trafficDelay')}`:''}</p>`}
   <details class="trip-assumptions"><summary>${mt('extraDetail')}</summary>${plan.transport_mode!=='transit'&&route?.total_minutes!=null?`<p>${route.total_minutes} ${mt('min')} ${mt('drive')} · ${plan.shopping_minutes} ${mt('min')} ${mt('inShops')}</p>`:''}${plan.vehicle_label?`<p>${esc(plan.vehicle_label)} · ${distanceNumber(plan.consumption)} ${plan.energy_unit}/100 km</p>`:''}${plan.fuel_quote?`<p>${distanceNumber(plan.fuel_quote.unit_price)} €/${esc(plan.energy_unit)} · ${mt('sourceDate')} ${esc(plan.fuel_quote.observed_on)} · ${esc(plan.fuel_quote.source)}</p>`:''}${plan.travel_method==='manual_km'?`<p>${mt('fuelSetup')}</p>`:''}${route?.base_km!=null?`<p>${ft('baseline')}: ${distanceNumber(route.base_km)} km · ${ft('additionalKm')}: ${distanceNumber(plan.extra_km)} · ${ft('additionalCost')}: ${plan.extra_travel_cents!=null?money(plan.extra_travel_cents):'—'}</p>`:''}${plan.transport_mode!=='transit'?`<p>${mt('fuelDisclaimer')}</p>`:''}${route?.transit_legs?`<div class="transit-connections"><strong>${mt('connectionTimes')}</strong>${route.transit_legs.map((leg,i)=>`<section><b>${i<plan.stores.length?esc(storeName((route.order||plan.stores)[i])):t('home')}</b>${leg.legs.map(s=>`<p>${esc(journeyTime(s.start))}–${esc(journeyTime(s.end))} · ${s.mode==='WALK'||s.mode==='FOOTPATH'?mt('walking'):esc(s.mode+' '+s.line)}</p>`).join('')}</section>`).join('')}</div>`:''}${plan.time_cost_cents?`<p>${mt('timeCost')}: ${money(plan.time_cost_cents)} · ${mt('timeValueHint')}</p>`:''}</details>`;

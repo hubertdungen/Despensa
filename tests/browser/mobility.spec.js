@@ -67,6 +67,9 @@ test('catalogue fills exact engine consumption, accepts three decimals and real 
   await expect(page.locator('#m-consumption')).toHaveValue('4.637');
   await page.locator('#m-consumption').fill('5.2');await page.locator('#profile-form button[type=submit]').click();
   await expect.poll(async()=> (await(await context.request.get('/api/me')).json()).profile.mobility.consumption).toBe(5.2);
+  await page.locator('#m-fuel').selectOption('electric');
+  await expect(page.locator('#m-consumption')).toHaveValue('');
+  await expect(page.locator('#m-unit_price')).toHaveValue('');
   await page.locator('#m-mode').selectOption('transit');await expect(page.locator('#m-transit_ticket')).toBeVisible();
   await expect(page.locator('#m-consumption')).toBeHidden();
 });
