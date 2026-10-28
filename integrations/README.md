@@ -79,3 +79,20 @@ volumes:
 ```
 
 `DESPENSA_RUMO_USER_IDS` aceita IDs de conta Despensa separados por vírgulas; não nomes de utilizador. Só essas contas veem a ligação. O orçamento segue o mês selecionado; um mês ausente ou exportação com mais de cinco minutos é assinalado, sem reutilizar valores de outro mês. O perfil pode escolher orçamento próprio. A integração é apenas de leitura: confirmar uma compra na Despensa não altera automaticamente a contabilidade do Rumo.
+
+## Trânsito opcional e transportes
+
+O planeamento de carro funciona sem chaves, com tempos rodoviários OSRM identificados como estimativas sem trânsito ao vivo. Para ativar TomTom, monte uma chave da Routing API no servidor. Exemplo de `compose.override.yaml` (junte às integrações existentes):
+
+```yaml
+services:
+  despensa:
+    environment:
+      DESPENSA_TOMTOM_KEY_FILE: /run/secrets/tomtom-key
+    volumes:
+      - ./secrets/tomtom-key:/run/secrets/tomtom-key:ro
+```
+
+Crie o ficheiro com a chave e leitura permitida apenas aos utilizadores necessários, incluindo o UID 1000 do contentor. Não publique o ficheiro nem o Compose privado. A alternativa é `DESPENSA_TOMTOM_KEY` no ambiente do servidor. Consulte limites e condições da sua conta TomTom. A app limita o refinamento a um candidato por número de lojas e guarda respostas em memória durante cinco minutos; uma falha preserva a estimativa estática com identificação explícita.
+
+O modo transportes usa o serviço público Transitous para aplicações livres não comerciais compatíveis com a [política de utilização](https://transitous.org/api/). Está limitado a 200 consultas por instalação/dia, com cache e [atribuição das fontes](https://transitous.org/sources/). Para MOTIS próprio ou outro uso, configure `DESPENSA_TRANSIT_URL` com o URL base do servidor (sem `/api/v6/plan`), além das condições/licenças dos dados necessários. Preço por embarque e cobertura do passe são declarados no perfil; não são tarifas consultadas automaticamente.

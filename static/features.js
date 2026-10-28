@@ -457,7 +457,7 @@ function renderNearby() {
           .filter((s) => s[axis] != null)
           .sort((a, b) => a[axis] - b[axis])
           .slice(0, 6);
-        return `<section><h3>${ft(label)}</h3>${stores.map((s) => `<div class="nearby-row"><div><strong>${esc(s.name)}</strong><small>${esc(s.address || s.country)}</small><small>${s[axis]} km${s.detour_km != null ? ` · ${ft("detour")}: ${s.detour_km} km` : ""}</small><a href="${nearbyMapLink(s)}" target="_blank" rel="noopener">${ft("map")} ↗</a></div><button type="button" class="quiet small" data-use-store="${esc(s.store)}">${icon("plus")}${ft("useStore")}</button></div>`).join("") || `<p class="muted">${ft("noStores")}</p>`}</section>`;
+        return `<section><h3>${ft(label)}</h3>${stores.map((s) => `<div class="nearby-row"><div><strong>${esc(s.name)}</strong><small>${esc(s.address || s.country)}</small><small>${s[axis]} km${s.detour_km != null ? ` · ${ft("detour")}: ${s.detour_km} km` : ""}</small><a href="${nearbyMapLink(s)}" target="_blank" rel="noopener">${ft("map")} ↗</a></div><button type="button" class="quiet small" data-use-branch="${esc(s.id)}">${icon("plus")}${mt("saveBranch")}</button></div>`).join("") || `<p class="muted">${ft("noStores")}</p>`}</section>`;
       })
       .join("")}</div>`;
   return `<h2 class="settings-title">${ft("nearby")}</h2><p class="muted">${ft("nearbyHint")}</p>${body}${n?.partial ? `<p class="muted">${ft("coverage")}</p>` : ""}<p class="privacy-note"><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> · Overpass · OSRM</p>`;
@@ -482,6 +482,7 @@ async function loadNearby(force = false) {
     if ($("#nearby-content")) {
       $("#nearby-content").innerHTML = renderNearby();
       bindFeatureActions();
+      bindJourneyActions();
     }
   }
 }
@@ -627,7 +628,7 @@ async function savingsModal() {
     );
 }
 function tripModal() {
-  const travel = state.plan?.plans?.[0]?.travel_cents;
+  const travel = state.selectedPlan?.plan?.extra_travel_cents ?? state.plan?.plans?.[0]?.extra_travel_cents;
   openModal(
     ft("recordTravel"),
     `<form id="trip-form"><div class="form-grid">${field("day", ft("purchaseDate"), state.month === thisMonth() ? today() : state.month + "-01", "date", `required max="${today()}"`)}${field("cost", ft("travelCost"), travel == null ? "" : (travel / 100).toFixed(2), "number", 'required min="0" max="10000" step="0.01"')}</div>${checkbox("estimated", ft("estimated"), travel != null)}<div class="auth-error" id="trip-error" role="alert"></div><div class="form-actions"><button type="button" data-cancel>${t("cancel")}</button><button type="submit" class="primary">${t("save")}</button></div></form>`,
@@ -672,6 +673,7 @@ function bindFeatureActions() {
       $("#catalog-results").innerHTML = renderProducts();
       bindProducts();
       bindFeatureActions();
+      bindJourneyActions();
     } catch (err) {
       toast(err.message);
       e.currentTarget.disabled = false;
@@ -761,6 +763,7 @@ setInterval(async () => {
         $("#catalog-results").innerHTML = renderProducts();
         bindProducts();
         bindFeatureActions();
+      bindJourneyActions();
       }
     }
   } catch {

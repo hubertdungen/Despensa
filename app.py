@@ -24,7 +24,9 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from catalog import STORE_MAP, cents, fold, product_text
 from planner import make_plan
 
-APP_VERSION = '0.5.1'
+from travel import defaults as travel_defaults
+
+APP_VERSION = '0.6.0'
 ROOT = Path(__file__).resolve().parent
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, password TEXT NOT NULL, created TEXT NOT NULL);
@@ -48,7 +50,7 @@ def utcnow():
 
 def default_profile():
     return dict(locale='pt-PT', countries=['PT'], budget=250, budget_source='auto', reference_store='', interval_hours=24, automatic=True,
-        max_stops=2, cost_per_km=.20, home='', work='', home_coords=None, work_coords=None,
+        mobility=travel_defaults(),max_stops=4, cost_per_km=.20, home='', work='', home_coords=None, work_coords=None,
         workdays=[0, 1, 2, 3, 4], stores={s: dict(enabled=not STORE_MAP[s]['professional'], card=False,
         subscription=False, delivery_subscription=False, access=False, coupons=[], extra_km=None, address='', coords=None) for s in STORE_MAP})
 
@@ -276,11 +278,14 @@ def create_app(data_dir=None, testing=False):
         p['countries'] = [c for c in d.get('countries', p['countries']) if c in ('PT', 'ES')]
         if not p['countries']:
             raise ValueError('Escolha pelo menos um país')
-        for key, low, high in [('budget', 0, 100000), ('interval_hours', 6, 168), ('max_stops', 1, 3), ('cost_per_km', 0, 10)]:
+        for key, low, high in [('budget', 0, 100000), ('interval_hours', 6, 168), ('max_stops', 1, 4), ('cost_per_km', 0, 10)]:
             value = float(d.get(key, p[key]))
             if not low <= value <= high:
                 raise ValueError(f'Valor inválido: {key}')
             p[key] = int(value) if key in ('interval_hours', 'max_stops') else value
+        if 'mobility' in d:
+            from travel import validate
+            p['mobility']=validate(d['mobility'],p.get('mobility'),folder)
         p['automatic'] = bool(d.get('automatic', p['automatic']))
         p['budget_source'] = 'manual' if d.get('budget_source', p.get('budget_source')) == 'manual' else 'auto'
         ref=str(d.get('reference_store', p.get('reference_store','')))
@@ -304,7 +309,12 @@ def create_app(data_dir=None, testing=False):
                 current['delivery_subscription'] = False
             if not store['professional']:
                 current['access'] = False
-            current['address'] = str(value.get('address', current.get('address', '')))[:300]
+            new_address=str(value.get('address',current.get('address','')))[:300]
+            if new_address!=current.get('address','') and 'coords' not in value:
+                current.update(coords=None,branch_id='',branch_name='')
+            current['address']=new_address
+            current['branch_id']=str(value.get('branch_id',current.get('branch_id','')))[:120]
+            current['branch_name']=str(value.get('branch_name',current.get('branch_name','')))[:160]
             current['coupons'] = [str(c)[:60] for c in value.get('coupons', current['coupons'])][:30]
             km = value.get('extra_km', current.get('extra_km'))
             if km is not None and not 0 <= float(km) <= 2000:
@@ -589,7 +599,72 @@ def create_app(data_dir=None, testing=False):
             option['distance_reason']=None if option['route'] else ('not_requested' if request.args.get('roads')!='true' else
                 'missing_home' if not p.get('home_coords') else 'missing_work' if work_route and not p.get('work_coords') else
                 'service_unavailable' if route_error else 'no_branch' if not road or any(s not in road['ids'] for s in option['stores']) else 'unreachable')
+        result['plans']=result['plans'][:12]
         return jsonify(result)
+
+    from plan_service import PlanService
+    planning=PlanService(database,profile,get_items,get_offers,folder)
+    app.planning=planning
+
+    @app.get('/api/vehicles')
+    @require_user
+    def vehicles():
+        from mobility_sources import search_vehicles
+        return jsonify(search_vehicles(folder,request.args.get('q',''),request.args.get('year') or None))
+
+    @app.get('/api/vehicles/detail')
+    @require_user
+    def vehicle_detail():
+        from mobility_sources import get_vehicle
+        return jsonify(vehicle=get_vehicle(folder,request.args.get('id','')))
+
+    @app.get('/api/fuel-prices')
+    @require_user
+    def fuel_data():
+        from mobility_sources import fuel_prices
+        return jsonify(fuel_prices(folder,request.args.get('country','PT')))
+
+    @app.post('/api/plans')
+    @require_user
+    def start_plan():
+        data=request.get_json();month=month_arg(data.get('month'));day=str(data.get('day',date.today().isoformat()))
+        date.fromisoformat(day)
+        mode=data.get('route','auto')
+        if mode not in ('auto','home','work'):raise ValueError('Origem inválida')
+        clock=str(data.get('departure_time',''))
+        if clock and not re.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d',clock):raise ValueError('Hora inválida')
+        from zoneinfo import ZoneInfo,ZoneInfoNotFoundError
+        zone=str(data.get('timezone','Europe/Lisbon'))[:64]
+        try:ZoneInfo(zone)
+        except (ValueError,ZoneInfoNotFoundError):raise ValueError('Fuso horário inválido') from None
+        maximum=int(data.get('max_stops',4))
+        if not 1<=maximum<=4:raise ValueError('Escolha entre uma e quatro lojas')
+        identifier=planning.start(g.user['id'],month,dict(day=day,route=mode,departure_time=clock,max_stops=maximum,timezone=zone))
+        return jsonify(run=planning.get(g.user['id'],identifier)),202
+
+    @app.get('/api/plans/<identifier>')
+    @require_user
+    def get_plan_run(identifier):
+        value=planning.get(g.user['id'],identifier)
+        if not value:return jsonify(error='Cálculo não encontrado'),404
+        return jsonify(run=value)
+
+    @app.post('/api/plans/select')
+    @require_user
+    def select_plan():
+        data=request.get_json()
+        return jsonify(selected=planning.select(g.user['id'],str(data.get('run_id','')),str(data.get('plan_id',''))))
+
+    @app.get('/api/plans/selected')
+    @require_user
+    def selected_plan():
+        return jsonify(selected=planning.selected(g.user['id'],month_arg()))
+
+    @app.delete('/api/plans/selected')
+    @require_user
+    def clear_selected_plan():
+        with database() as db:db.execute('DELETE FROM selected_plans WHERE user_id=? AND month=?',(g.user['id'],month_arg(request.get_json().get('month'))))
+        return jsonify(ok=True)
 
     @app.get('/api/geocode')
     @require_user
@@ -745,7 +820,8 @@ def create_app(data_dir=None, testing=False):
             rows = [dict(r) for r in db.execute('SELECT month,data FROM items WHERE user_id=?', (g.user['id'],))]
             purchases=[json.loads(r['data']) for r in db.execute('SELECT data FROM purchases WHERE user_id=?',(g.user['id'],))]
             trips=[json.loads(r['data']) for r in db.execute('SELECT data FROM trips WHERE user_id=?',(g.user['id'],))]
-        response = jsonify(version=1, exported_at=utcnow(), profile=profile(g.user['id']),
+            selected=[json.loads(r['data']) for r in db.execute('SELECT data FROM selected_plans WHERE user_id=?',(g.user['id'],))]
+        response = jsonify(version=1, exported_at=utcnow(), selected_plans=selected, profile=profile(g.user['id']),
             items=[dict(json.loads(r['data']), month=r['month']) for r in rows],
             offers=[o for o in get_offers(g.user['id']) if o['source_kind'] == 'manual'],purchases=purchases,trips=trips)
         response.headers['Content-Disposition'] = 'attachment; filename="despensa.json"'

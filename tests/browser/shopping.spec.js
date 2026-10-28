@@ -226,21 +226,19 @@ test('Fitness Original remains discoverable beside fibre variants and a unit buy
   await page.locator('#item-form button[type=submit]').click();
   await page.locator('.mobile-nav [data-view=plan]').click();
   await expect(page.locator('.plan-card').first()).toContainText('1 / 1');
-  await expect(page.locator('.plan-card').first().locator('header')).toContainText('Plano sugerido');
-  await expect(page.locator('.plan-card').first()).not.toContainText('Cabaz incompleto');
-  await expect(page.locator('.plan-products').first()).toContainText('1 embalagem');
+  await expect(page.locator('.plan-card').first().locator('header')).not.toContainText('Faltam produtos');
+  await expect(page.locator('.plan-card').first()).not.toContainText('Faltam produtos');
+  await expect(page.locator('.stop-products').first()).toContainText('1 embalagem');
   await page.locator('.mobile-nav [data-view=explore]').click();
   await page.locator('#catalog-search').fill('Os Cereais Linha e Fibra Fitness');
   await expect(page.locator('.comparison-card').filter({hasText:'Trigo e Aveia'})).toHaveCount(1);
 });
 
 test('partial baskets show missing products and separate total route from extra kilometres',async({page})=>{
-  await page.route('**/api/plan?**',async route=>{
+  await page.route(/\/api\/plans(?:\/[^?]+)?(?:\?.*)?$/,async route=>{
+    if(!['GET','POST'].includes(route.request().method())||route.request().url().includes('/selected'))return route.continue();
     const response=await route.fetch(),data=await response.json();
-    if(new URL(route.request().url()).searchParams.get('roads')==='true') {
-      data.plans=data.plans.map(p=>({...p,extra_km:0,travel_cents:0,distance_reason:null,distance_method:'road',route:{total_km:9.32,base_km:9.32,total_minutes:15,extra_minutes:0,base:'work',stops:[{name:'Loja de teste',store:'auchan'}]}}));
-      data.distance_method='road';
-    }
+    if(data.run?.result) data.run.result.plans=data.run.result.plans.map(p=>({...p,extra_km:0,extra_travel_cents:0,travel_cents:186,fuel_cents:186,travel_method:'manual_km',total_cents:p.basket_cents+186,total_minutes:30,route:{total_km:9.32,base_km:9.32,total_minutes:15,extra_minutes:0,base:'work',order:p.stores,stops:p.stores.map(store=>({name:'Loja de teste',store}))}}));
     await route.fulfill({response,json:data});
   });
   await page.goto('/');await page.locator('#auth-toggle').click();
@@ -253,12 +251,13 @@ test('partial baskets show missing products and separate total route from extra 
   }
   await page.locator('.mobile-nav [data-view=plan]').click();
   const card=page.locator('.plan-card').first();
-  await expect(card).toContainText('Cabaz incompleto');
+  await expect(card).toContainText('Faltam produtos');
   await expect(card.locator('header')).not.toContainText('Plano sugerido');
   await expect(card.locator('.missing-products')).toContainText('Produto sem catálogo');
-  await expect(card.locator('.plan-metrics')).toContainText('Percurso total: 9,32 km');
-  await expect(card.locator('.plan-metrics')).toContainText('+0 km adicionais');
-  await expect(card.locator('.plan-metrics')).toContainText('Custo adicional:');
+  await expect(card.locator('.journey-facts')).toContainText('9,32 km');
+  await expect(card.locator('.journey-facts')).toContainText('1,86');
+  await card.locator('.trip-assumptions summary').click();
+  await expect(card.locator('.trip-assumptions')).toContainText('Custo adicional: 0,00');
   await page.unrouteAll({behavior:'wait'});
 });
 
@@ -271,7 +270,7 @@ test('a later list response cannot overwrite a calculated road plan',async({page
     const begun=new Promise(resolve=>{started=resolve;});
     api=async path=>{
       if(path.startsWith('/plan?')&&path.includes('roads=false')) return new Promise(resolve=>{finish=resolve;started();});
-      return {plans:[],missing:[],marker:'road'};
+      return {run:{id:'test',status:'ready',result:{plans:[],missing:[],marker:'road'}}};
     };
     try {
       state.view='list';const older=loadPlan();
@@ -317,6 +316,6 @@ test('two products added while a save is pending both persist before planning',a
   await expect.poll(async()=> (await(await context.request.get('/api/items')).json()).items.length).toBe(2);
   await expect.poll(()=>page.evaluate(()=>readQueue().length)).toBe(0);
   await expect(page.locator('.plan-card').first()).toContainText('1 / 2');
-  await expect(page.locator('.plan-card').first()).toContainText('Cabaz incompleto');
+  await expect(page.locator('.plan-card').first()).toContainText('Faltam produtos');
   await page.unrouteAll({behavior:'wait'});
 });

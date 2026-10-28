@@ -75,7 +75,7 @@ def road_matrix(profile, store_ids, day, mode='auto', branches=None):
     points, ids, places = [origin, home], {}, {}
     for sid in selected:
         explicit = profile['stores'].get(sid, {})
-        options = [dict(store=sid,coords=explicit['coords'],name=explicit.get('address') or sid)] if explicit.get('coords') else [s for s in (branches or []) if s['store']==sid]
+        options = [dict(store=sid,coords=explicit['coords'],name=explicit.get('branch_name') or sid,address=explicit.get('address',''),id=explicit.get('branch_id') or 'saved:'+sid,source='saved')] if explicit.get('coords') else [s for s in (branches or []) if s['store']==sid]
         options.sort(key=lambda s: s.get('detour_km' if work_route else 'home_km') if s.get('detour_km' if work_route else 'home_km') is not None else 1e9)
         for option in options[:3]:
             index=len(points)
@@ -85,7 +85,7 @@ def road_matrix(profile, store_ids, day, mode='auto', branches=None):
     if len(points)==2:
         return None
     data=table(points)
-    return dict(ids=ids,places=places,distances=data['distances'],durations=data['durations'],base='work' if work_route else 'home')
+    return dict(ids=ids,places=places,distances=data['distances'],durations=data['durations'],base='work' if work_route else 'home',points=points)
 
 
 def distance_for(stores, matrix):
@@ -109,7 +109,8 @@ def distance_for(stores, matrix):
             if best is None or (meters,total_seconds,total_meters) < (best['meters'],best['_seconds'],best['_total_meters']):
                 best = dict(meters=meters,km=round(meters/1000,2),extra_minutes=round(minutes),_seconds=total_seconds,_total_meters=total_meters,
                     total_km=round(total_meters/1000,2),base_km=round(distances[0][1]/1000,2),total_minutes=round(total_seconds/60),order=list(order),
-                    stops=[matrix.get('places',{}).get(i,{'store':s}) for i,s in zip(chosen,order)],base=matrix['base'])
+                    stops=[matrix.get('places',{}).get(i,{'store':s}) for i,s in zip(chosen,order)],base=matrix['base'],
+                    coordinates=[matrix['points'][i] for i in nodes] if matrix.get('points') else [],provider='OSRM',traffic='unavailable')
     if best:
         best.pop('_seconds');best.pop('_total_meters')
     return best

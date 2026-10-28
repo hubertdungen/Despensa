@@ -1,5 +1,5 @@
 "use strict";
-const APP_VERSION = "0.5.1";
+const APP_VERSION = "0.6.0";
 const $ = (s) => document.querySelector(s);
 const esc = (x) =>
   String(x ?? "").replace(
@@ -162,7 +162,7 @@ const copy = {
     interval: "Atualizar a cada (horas)",
     auto: "Atualizar automaticamente no servidor",
     stops: "Máximo de lojas por ida",
-    costKm: "Custo da deslocação (€ / km)",
+    costKm: "Estimativa alternativa (€ / km)",
     routine: "A sua rotina",
     home: "Zona de casa",
     work: "Zona de trabalho",
@@ -375,7 +375,7 @@ const copy = {
     interval: "Actualizar cada (horas)",
     auto: "Actualizar automáticamente en el servidor",
     stops: "Máximo de tiendas por visita",
-    costKm: "Coste del desplazamiento (€ / km)",
+    costKm: "Estimación alternativa (€ / km)",
     routine: "Su rutina",
     home: "Zona de casa",
     work: "Zona del trabajo",
@@ -546,6 +546,7 @@ function saveSnapshot() {
         comparisons: state.comparisons,
         savings: state.savings,
         plan: state.plan,
+        selectedPlan: state.selectedPlan,
         stores: state.stores,
         items: state.items,
         offers: state.offers,
@@ -702,7 +703,8 @@ function renderAuth() {
   };
 }
 function bestForItem(item) {
-  const p = state.plan?.plans?.[0];
+  const selected=state.selectedPlan;
+  const p=selected&&!selected.stale&&!selected.expired?selected.plan:state.plan?.plans?.[0];
   return p?.selections?.find((s) => s.item_id === item.id);
 }
 function budgetSource() {
@@ -724,7 +726,7 @@ function renderList() {
   const groups = [
     ...new Set(state.items.map((i) => i.category || "Mercearia")),
   ];
-  return `${title("monthList", "subtitle", monthPicker())}${state.shopping ? `<button class="quiet small" data-action="shopping">${icon("close")}${t("exitShopping")}</button>` : ""}<section class="hero"><div class="hero-text"><div class="eyebrow">${t("heroLabel")}</div><h2>${t("heroTitle").replace("\n", "<br>")}</h2><p>${t("heroText")}</p></div>${heroArt()}</section><div class="stats"><div class="stat"><div class="stat-icon">${icon("bag")}</div><div><div class="label">${t("items")}</div><div class="number">${state.items.length}</div><div class="detail">${checked} ${t("done")}</div></div></div><div class="stat"><div class="stat-icon">${icon("wallet")}</div><div><div class="label">${t("budget")}</div><div class="number">${state.budget?.amount_cents == null ? "—" : money(state.budget.amount_cents)}</div><div class="detail" id="budget-source">${budgetSource()}</div></div></div><div class="stat"><div class="stat-icon">${icon("search")}</div><div><div class="label">${t("prices")}</div><div class="number">${state.status.offer_count || 0}</div><div class="detail">${t("pricesDetail")}</div></div></div>${renderSavingsStat()}</div><div class="dashboard-grid"><section class="panel"><div class="panel-head"><div><h2>${t("yourList")}</h2><p>${t("listHint")}</p></div><button class="primary small" data-action="add">${icon("plus")}${t("add")}</button></div>${
+  return `${title("monthList", "subtitle", monthPicker())}${renderSelectedJourney()}${state.shopping ? `<button class="quiet small" data-action="shopping">${icon("close")}${t("exitShopping")}</button>` : ""}<section class="hero"><div class="hero-text"><div class="eyebrow">${t("heroLabel")}</div><h2>${t("heroTitle").replace("\n", "<br>")}</h2><p>${t("heroText")}</p></div>${heroArt()}</section><div class="stats"><div class="stat"><div class="stat-icon">${icon("bag")}</div><div><div class="label">${t("items")}</div><div class="number">${state.items.length}</div><div class="detail">${checked} ${t("done")}</div></div></div><div class="stat"><div class="stat-icon">${icon("wallet")}</div><div><div class="label">${t("budget")}</div><div class="number">${state.budget?.amount_cents == null ? "—" : money(state.budget.amount_cents)}</div><div class="detail" id="budget-source">${budgetSource()}</div></div></div><div class="stat"><div class="stat-icon">${icon("search")}</div><div><div class="label">${t("prices")}</div><div class="number">${state.status.offer_count || 0}</div><div class="detail">${t("pricesDetail")}</div></div></div>${renderSavingsStat()}</div><div class="dashboard-grid"><section class="panel"><div class="panel-head"><div><h2>${t("yourList")}</h2><p>${t("listHint")}</p></div><button class="primary small" data-action="add">${icon("plus")}${t("add")}</button></div>${
     state.items.length
       ? groups
           .map(
@@ -780,24 +782,7 @@ function renderExplore() {
 function renderProducts() {
   return renderComparisonProducts();
 }
-function renderPlan() {
-  const result = state.plan;
-  return `${title("planTitle", "planSubtitle")}<div class="toolbar"><label for="plan-day" class="muted">${t("date")}</label><input type="date" id="plan-day" value="${state.day}"><select id="route-mode" aria-label="${t("routeMode")}"><option value="auto" ${state.route === "auto" ? "selected" : ""}>${t("routeMode")}</option><option value="home" ${state.route === "home" ? "selected" : ""}>${t("homeRoute")}</option><option value="work" ${state.route === "work" ? "selected" : ""}>${t("workRoute")}</option></select><button class="primary" data-action="plan">${icon("route")}${t("calculate")}</button></div><p id="plan-loading" role="status" ${state.planLoading ? "" : "hidden"}>${ft("routeLoading")}</p><div class="notice">${icon("shield")}<span>${t("planNotice")}</span></div>${state.day > today() ? `<div class="notice amber">${icon("calendar")}<span>${t("futureNotice")}</span></div>` : ""}${result?.missing?.length ? `<div class="notice amber">${icon("search")}<span><b>${t("missing")}:</b> ${result.missing.map(esc).join(", ")}</span></div>` : ""}${
-    result?.plans?.length
-      ? result.plans
-          .slice(0, 6)
-          .map(
-            (p, index) =>
-              `<article class="plan-card ${index === 0 && p.complete ? "best" : ""}"><header><div>${index === 0 && p.complete ? `<span class="tag">${t("best")}</span>` : ""}${!p.complete ? `<span class="tag amber">${t("partial")}</span>` : ""}<h3>${p.stores.map((s) => esc(storeName(s))).join(" + ")}</h3><span class="muted">${p.coverage} / ${p.total_items} ${t("coverageLabel")}</span></div><div class="plan-total">${money(p.total_cents)}<div class="muted total-note">${t(p.travel_cents === null ? "subtotal" : "total")}</div></div></header>${p.missing?.length ? `<div class="notice amber missing-products"><b>${ft("missingInPlan")}:</b> ${p.missing.map(esc).join(", ")}</div>` : ""}<div class="plan-metrics"><span>${t("basket")}: <b>${money(p.basket_cents)}</b></span><span>${icon("route")} ${planDistance(p)}</span>${p.balance_cents ? `<span>${t("futureBalance")}: ${money(p.balance_cents)}</span>` : ""}</div><div class="plan-products">${p.selections.map((s) => `<div class="plan-product"><div>${esc(s.item_name)}<small>${esc(s.offer.name)} · ${s.packs} ${s.quantity_basis === "packages" ? ft(s.packs === 1 ? "package" : "packages") + " de" : "×"} ${esc(s.offer.pack)} · ${esc(storeName(s.offer.store))}</small></div><b>${money(s.cost_cents)}</b></div>`).join("")}</div>${routeItinerary(p)}</article>`,
-          )
-          .join("")
-      : empty(
-          "planEmpty",
-          "planEmptyText",
-          `<button class="primary small" data-view="profile">${t("profile")}${icon("arrow")}</button>`,
-        )
-  }<p class="privacy-note">${icon("pin")}<span>${t(result?.distance_method === "road" ? "routeReal" : "distanceNotice")}${result?.route_error ? " " + t("routeUnavailable") : ""}</span></p><p class="privacy-note">${t("budgetHint")}</p><p class="privacy-note"><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> · OSRM</p>`;
-}
+function renderPlan() { return renderJourneyPlan(); }
 function field(name, label, value, type = "text", extra = "", hint = "") {
   return `<div class="field"><label for="f-${name}">${t(label)}</label><input id="f-${name}" name="${name}" type="${type}" value="${esc(value)}" ${extra}>${hint ? `<span class="hint">${t(hint)}</span>` : ""}</div>`;
 }
@@ -806,7 +791,7 @@ function checkbox(name, label, checked) {
 }
 function renderProfile() {
   const p = state.profile;
-  return `${title("profileTitle", "profileSubtitle")}<form id="profile-form"><div class="settings-grid"><section class="panel"><div class="panel-body"><h2 class="settings-title">${t("preferences")}</h2>${authSettings()}<div class="form-grid"><div class="field"><label for="f-locale">${t("locale")}</label><select name="locale" id="f-locale"><option value="pt-PT" ${locale === "pt-PT" ? "selected" : ""}>Português</option><option value="es-ES" ${locale === "es-ES" ? "selected" : ""}>Español</option></select></div>${field("budget", "manualBudget", p.budget, "number", 'min="0" max="100000" step="1"')}${field("interval_hours", "interval", p.interval_hours, "number", 'min="6" max="168" step="1"')}${field("max_stops", "stops", p.max_stops, "number", 'min="1" max="3" step="1"')}${field("cost_per_km", "costKm", p.cost_per_km, "number", 'min="0" max="10" step="0.01"')}${referenceStoreField()}<div class="field"><label>${t("countries")}</label>${checkbox("country-PT", "Portugal", p.countries.includes("PT"))}${checkbox("country-ES", "España", p.countries.includes("ES"))}</div></div>${state.budget?.rumo_available ? checkbox("budget_source_auto", "budgetAuto", p.budget_source !== "manual") : ""}<p class="muted">${budgetSource()}</p>${checkbox("automatic", "auto", p.automatic)}</div></section><section class="panel"><div class="panel-body"><h2 class="settings-title">${t("routine")}</h2><div class="field"><label for="f-home">${t("home")}</label><div class="toolbar"><input id="f-home" name="home" value="${esc(p.home)}" placeholder="Lisboa, Portugal"><button type="button" class="small" data-locate="home">${icon("pin")}${t("locate")}</button></div><small class="muted" id="coords-home">${p.home_coords ? esc(p.home_coords.join(", ")) : ""}</small></div><div class="field"><label for="f-work">${t("work")}</label><div class="toolbar"><input id="f-work" name="work" value="${esc(p.work)}" placeholder=""><button type="button" class="small" data-locate="work">${icon("pin")}${t("locate")}</button></div><small class="muted" id="coords-work">${p.work_coords ? esc(p.work_coords.join(", ")) : ""}</small></div><p class="privacy-note">${t("geocodeHint")}</p><p class="privacy-note"><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> · <a href="https://operations.osmfoundation.org/policies/nominatim/" target="_blank" rel="noopener">Nominatim</a></p><div class="field"><label>${t("workdays")}</label><div class="toolbar">${Array.from({ length: 7 }, (_, i) => `<label class="checkbox-field"><input type="checkbox" name="workday-${i}" ${p.workdays.includes(i) ? "checked" : ""}>${new Intl.DateTimeFormat(locale, { weekday: "short" }).format(new Date(2026, 0, 5 + i))}</label>`).join("")}</div></div></div></section><section class="wide panel"><div class="panel-body" id="nearby-content">${renderNearby()}</div></section><section class="wide"><div class="page-title"><div><h2>${t("stores")}</h2><p>${t("storesHint")}</p></div></div><div class="store-settings">${state.stores
+  return `${title("profileTitle", "profileSubtitle")}<form id="profile-form"><div class="settings-grid"><section class="panel"><div class="panel-body"><h2 class="settings-title">${t("preferences")}</h2>${authSettings()}<div class="form-grid"><div class="field"><label for="f-locale">${t("locale")}</label><select name="locale" id="f-locale"><option value="pt-PT" ${locale === "pt-PT" ? "selected" : ""}>Português</option><option value="es-ES" ${locale === "es-ES" ? "selected" : ""}>Español</option></select></div>${field("budget", "manualBudget", p.budget, "number", 'min="0" max="100000" step="1"')}${field("interval_hours", "interval", p.interval_hours, "number", 'min="6" max="168" step="1"')}${field("max_stops", "stops", p.max_stops, "number", 'min="1" max="4" step="1"')}${field("cost_per_km", "costKm", p.cost_per_km, "number", 'min="0" max="10" step="0.01"')}${referenceStoreField()}<div class="field"><label>${t("countries")}</label>${checkbox("country-PT", "Portugal", p.countries.includes("PT"))}${checkbox("country-ES", "España", p.countries.includes("ES"))}</div></div>${state.budget?.rumo_available ? checkbox("budget_source_auto", "budgetAuto", p.budget_source !== "manual") : ""}<p class="muted">${budgetSource()}</p>${checkbox("automatic", "auto", p.automatic)}</div></section><section class="panel"><div class="panel-body"><h2 class="settings-title">${t("routine")}</h2><div class="field"><label for="f-home">${t("home")}</label><div class="toolbar"><input id="f-home" name="home" value="${esc(p.home)}" placeholder="Lisboa, Portugal"><button type="button" class="small" data-locate="home">${icon("pin")}${t("locate")}</button></div><small class="muted" id="coords-home">${p.home_coords ? esc(p.home_coords.join(", ")) : ""}</small></div><div class="field"><label for="f-work">${t("work")}</label><div class="toolbar"><input id="f-work" name="work" value="${esc(p.work)}" placeholder=""><button type="button" class="small" data-locate="work">${icon("pin")}${t("locate")}</button></div><small class="muted" id="coords-work">${p.work_coords ? esc(p.work_coords.join(", ")) : ""}</small></div><p class="privacy-note">${t("geocodeHint")}</p><p class="privacy-note"><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> · <a href="https://operations.osmfoundation.org/policies/nominatim/" target="_blank" rel="noopener">Nominatim</a></p><div class="field"><label>${t("workdays")}</label><div class="toolbar">${Array.from({ length: 7 }, (_, i) => `<label class="checkbox-field"><input type="checkbox" name="workday-${i}" ${p.workdays.includes(i) ? "checked" : ""}>${new Intl.DateTimeFormat(locale, { weekday: "short" }).format(new Date(2026, 0, 5 + i))}</label>`).join("")}</div></div></div></section>${mobilitySettings()}<div class="wide" id="saved-branches-panel">${savedStoresPanel()}</div><section class="wide panel"><div class="panel-body" id="nearby-content">${renderNearby()}</div></section><section class="wide"><div class="page-title"><div><h2>${t("stores")}</h2><p>${t("storesHint")}</p></div></div><div class="store-settings">${state.stores
     .map((s) => {
       const v = p.stores[s.id];
       return `<section class="store-setting" data-store="${s.id}"><header><div><strong>${esc(s.name)}</strong> <span class="tag gray">${s.country}</span></div><span class="tag ${s.automatic ? "" : "gray"}">${researchLabel(s.id)}</span></header>${checkbox(`${s.id}-enabled`, "enabled", v.enabled)}<div class="checks">${s.loyalty ? checkbox(`${s.id}-card`, s.loyalty, v.card) : ""}${s.subscription?.kind === "delivery" ? checkbox(`${s.id}-delivery_subscription`, "deliveryPass", v.delivery_subscription) : ""}${s.professional ? checkbox(`${s.id}-access`, "hasAccess", v.access) : ""}</div>${s.subscription?.kind === "delivery" ? `<p class="privacy-note">${t("deliveryOnly")}</p>` : ""}<div class="field"><label for="f-${s.id}-address">${t("storeAddress")}</label><div class="toolbar"><input name="${s.id}-address" id="f-${s.id}-address" value="${esc(v.address)}"><button type="button" class="small" data-locate="${s.id}">${icon("pin")}${t("locate")}</button></div><small class="muted" id="coords-${s.id}">${v.coords ? esc(v.coords.join(", ")) : ""}</small></div>${field(`${s.id}-coupons`, "coupons", v.coupons.join(", "))}</section>`;
@@ -1008,25 +993,53 @@ async function fetchCatalog({
   saveSnapshot();
 }
 let planSequence = 0;
+function updatePlanProgress() {
+  if(state.view!=="plan")return;
+  const status=$("#plan-loading");
+  if(status){
+    status.hidden=!state.planLoading;
+    const label=status.querySelector('strong');if(label)label.textContent=mt('phase_'+(state.planRun?.phase||'queued'));
+    const phases=['queued','products','fuel','locations','roads','optimizing','traffic','transit','ready'];
+    const bar=status.querySelector('progress');if(bar)bar.value=Math.min(95,10+Math.max(0,phases.indexOf(state.planRun?.phase||'queued'))*12);
+  }
+  const button=$('[data-action="plan"]');
+  if(button){button.disabled=state.planLoading;button.innerHTML=icon('route',state.planLoading?'spinner':'')+mt(state.planLoading?'calculatingTrip':'calculateTrip');}
+  document.querySelectorAll('[data-select-plan]').forEach(b=>b.disabled=!!state.planLoading);
+}
 async function loadPlan() {
   if (state.offline) return;
-  const seq = ++planSequence, roads = state.view === "plan";
-  state.planLoading = roads;
-  if ($("#plan-loading")) $("#plan-loading").hidden = !roads;
+  const seq=++planSequence,roads=state.view==='plan',month=state.month;
+  state.planLoading=roads;state.planError=null;
+  if(roads)state.planRun={phase:'queued'};
+  if(roads)render();
+  updatePlanProgress();
   try {
     await flushQueue();
-    if (state.offline || seq !== planSequence) return;
-    const result = await api(`/plan?month=${state.month}&day=${state.day}&route=${state.route}&roads=${roads}`);
-    if (seq !== planSequence || roads !== (state.view === "plan")) return;
-    state.plan = result;
-    state.planLoading = false;
-    if (["list", "plan"].includes(state.view)) render();
-  } catch (err) {
-    if (seq !== planSequence) return;
-    state.planLoading = false;
-    if ($("#plan-loading")) $("#plan-loading").hidden = true;
-    if (err.network) state.offline = true;
-    else toast(err.message);
+    if(state.offline||seq!==planSequence)return;
+    if(!roads&&state.selectedPlan)await loadSelectedJourney();
+    if(!roads){
+      const result=await api(`/plan?month=${month}&day=${state.day}&route=${state.route}&roads=false`);
+      if(seq!==planSequence||state.view==='plan'||month!==state.month)return;
+      state.plan=result;state.planLoading=false;
+      if(state.view==='list')render();return;
+    }
+    const response=await api('/plans','POST',{month,day:state.day,route:state.route,departure_time:state.departureTime||'',max_stops:state.planMaxStops||4,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone});
+    let run=response.run;
+    while(seq===planSequence&&state.view==='plan'&&month===state.month){
+      state.planRun=run;updatePlanProgress();
+      if(run.status==='ready'){
+        state.plan=run.result;state.planLoading=false;saveSnapshot();render();return;
+      }
+      if(['error','interrupted','superseded'].includes(run.status))throw new Error(run.error||t('error'));
+      await new Promise(resolve=>setTimeout(resolve,700));
+      if(seq!==planSequence||state.view!=='plan')return;
+      run=(await api('/plans/'+run.id)).run;
+    }
+  }catch(err){
+    if(seq!==planSequence)return;
+    state.planLoading=false;state.planError=err.message;
+    if(err.network)state.offline=true;
+    if(state.view==='plan')render();else toast(err.message);
   }
 }
 
@@ -1047,6 +1060,7 @@ async function load() {
       api("/offers?q=" + encodeURIComponent(state.search)),
       api("/budget?month=" + state.month),
       api("/savings?month=" + state.month),
+      loadSelectedJourney(),
     ]);
     state.items = items.items;
     state.status = status;
@@ -1107,11 +1121,13 @@ function bind() {
     state.budget = null;
     state.savings = null;
     state.plan = null;
+    state.selectedPlan = null;
     try {
       const [r] = await Promise.all([
         api("/items?month=" + state.month),
         loadBudget(),
         loadSavings(),
+        loadSelectedJourney(),
       ]);
       state.items = r.items;
       saveSnapshot();
@@ -1156,6 +1172,7 @@ function bind() {
     );
   bindProducts();
   bindFeatureActions();
+  bindJourneyActions();
   $("#catalog-search")?.addEventListener("input", (e) => {
     state.search = e.target.value;
     beginCatalogSearch();
@@ -1251,6 +1268,10 @@ function beginCatalogSearch() {
 }
 async function saveProfile(e) {
   e.preventDefault();
+  if(state.profileSaving)return;
+  state.profileSaving=true;
+  const saveButton=e.target.querySelector('[type="submit"]');
+  saveButton.disabled=true;saveButton.textContent=mt("savingSettings");
   const f = e.target,
     d = Object.fromEntries(new FormData(f)),
     p = structuredClone(state.profile);
@@ -1264,6 +1285,7 @@ async function saveProfile(e) {
     "cost_per_km",
   ])
     p[k] = d[k];
+  p.mobility = mobilityFormData();
   p.reference_store = d.reference_store || "";
   for (const key of ["home", "work"])
     if (d[key] !== state.profile[key] && located[key] !== d[key])
@@ -1288,8 +1310,9 @@ async function saveProfile(e) {
     if (
       v.address !== d[s.id + "-address"] &&
       located[s.id] !== d[s.id + "-address"]
-    )
-      v.coords = null;
+    ) {
+      v.coords = null;v.branch_id="";v.branch_name="";
+    }
     v.address = d[s.id + "-address"];
     v.extra_km = null;
     v.coupons = d[s.id + "-coupons"]
@@ -1305,12 +1328,16 @@ async function saveProfile(e) {
     localStorage.setItem("despensa-locale", locale);
     saveSnapshot();
     toast(unresolved.length ? ft("locationsUnresolved") : t("saved"));
-    await Promise.all([loadOffers(), loadBudget(), loadSavings()]);
+    state.profileSaving=false;
     render();
+    await Promise.all([loadOffers(), loadBudget(), loadSavings()]);
     loadPlan();
     loadNearby(true);
   } catch (err) {
     toast(err.message);
+  } finally {
+    state.profileSaving=false;
+    if(saveButton.isConnected){saveButton.disabled=false;saveButton.innerHTML=icon("check")+t("saveProfile");}
   }
 }
 async function locate(key) {
@@ -1335,13 +1362,16 @@ async function locate(key) {
             located[key] = place.label;
             if (key === "home" || key === "work")
               state.profile[key + "_coords"] = place.coords;
-            else state.profile.stores[key].coords = place.coords;
+            else Object.assign(state.profile.stores[key],{coords:place.coords,address:place.label,branch_name:storeName(key),branch_id:""});
             $("#coords-" + key).textContent = place.coords.join(", ");
-            if (key === "home" || key === "work") {
-              const saved = api("/profile", "PUT", { [key]: place.label, [key + "_coords"]: place.coords });
-              state.profile[key] = place.label;
-              saved.then(() => { saveSnapshot(); toast(t("saved")); loadNearby(true); }).catch(err => toast(err.message));
-            }
+            const routine=key==='home'||key==='work';
+            const payload=routine?{[key]:place.label,[key+'_coords']:place.coords}:{stores:{[key]:state.profile.stores[key]}};
+            if(routine)state.profile[key]=place.label;
+            api('/profile','PUT',payload).then(r=>{
+              state.profile=r.profile;saveSnapshot();toast(t('saved'));
+              if($('#saved-branches-panel'))$('#saved-branches-panel').innerHTML=savedStoresPanel();
+              loadNearby(true);
+            }).catch(err=>toast(err.message));
             $("#modal").close();
           }),
       );
@@ -1397,7 +1427,7 @@ async function action(name) {
       state.user = null;
       state.items = [];
       state.offers = [];
-      state.plan = null;
+      ++planSequence;state.plan = null;state.selectedPlan=null;state.planRun=null;
       if (result.redirect) {
         window.location.assign(result.redirect);
         return;

@@ -3,7 +3,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 DESPENSA_DATA=/data
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt && useradd --uid 1000 --create-home despensa && mkdir /data && chown despensa /data
-COPY --chown=despensa:despensa app.py catalog.py planner.py routing.py budget.py products.py nearby.py store_locations.py images.py research.py searching.py retailer_data.py leaflets.py ./
+COPY --chown=despensa:despensa app.py catalog.py planner.py routing.py budget.py products.py nearby.py store_locations.py images.py research.py searching.py retailer_data.py leaflets.py mobility_sources.py travel.py journey.py plan_service.py ./
 COPY --chown=despensa:despensa static/ ./static/
 COPY --chown=despensa:despensa integrations/ ./integrations/
 USER despensa

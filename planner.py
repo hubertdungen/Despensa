@@ -1,4 +1,6 @@
 """Explainable basket comparison. Costs are integer cents; quantities account for whole packs."""
+import hashlib
+import json
 import itertools
 import math
 from decimal import Decimal, ROUND_HALF_UP
@@ -126,7 +128,7 @@ def make_plan(items, offers, prefs, day, now=None, road=None):
     missing = [i['name'] for i in pending if not choices[i['id']]]
     store_ids = sorted({c['offer']['store'] for options in choices.values() for c in options})
     plans = []
-    maximum = min(int(prefs.get('max_stops', 2)), 3)
+    maximum = min(int(prefs.get('max_stops', 4)), 4)
     for n in range(1, maximum + 1):
         for stores in itertools.combinations(store_ids, n):
             selected = [next((c for c in choices[i['id']] if c['offer']['store'] in stores), None) for i in pending]
@@ -146,10 +148,13 @@ def make_plan(items, offers, prefs, day, now=None, road=None):
                 complete=len(found) == len(pending), basket_cents=basket, travel_cents=travel,
                 total_cents=basket + travel if travel is not None else basket,
                 extra_km=km, route=route, distance_method='road' if route else 'unavailable', balance_cents=sum(c['balance_cents'] for c in found)))
+    for option in plans:
+        key=[option['stores'],[(s['item_id'],s['offer']['id'],s['packs']) for s in option['selections']],(option.get('route') or {}).get('coordinates')]
+        option['id']=hashlib.sha256(json.dumps(key,sort_keys=True).encode()).hexdigest()[:24]
     # Never rank a partially priced basket ahead of a fully covered one.
     # An unknown journey cost cannot undercut a fully costed basket. Keep those
     # alternatives visible, after plans with the same coverage and a road route.
     plans.sort(key=lambda p: (-p['coverage'], p['travel_cents'] is None, p['total_cents'], len(p['stores'])))
-    return dict(plans=plans[:12], missing=missing, pending=len(pending), day=day,
+    return dict(plans=plans, missing=missing, pending=len(pending), day=day,
         comparison='keyword_suggestions', distance_method='road' if road else 'unavailable',
         warning='Confirme marca, tipo, formato e disponibilidade na loja. Percursos por estrada calculados a partir de casa e trabalho; sem resposta do serviço, a deslocação fica por confirmar.')
