@@ -102,9 +102,14 @@ def distance_for(stores, matrix):
             legs = list(zip(nodes, nodes[1:]))
             if any(distances[a][b] is None or durations[a][b] is None for a, b in legs):
                 continue
-            meters = max(0, sum(distances[a][b] for a, b in legs) - distances[0][1])
-            minutes = max(0, sum(durations[a][b] for a, b in legs) - durations[0][1]) / 60
-            if best is None or meters < best['meters']:
-                best = dict(meters=meters,km=round(meters/1000,2),extra_minutes=round(minutes),order=list(order),
+            total_meters=sum(distances[a][b] for a,b in legs)
+            total_seconds=sum(durations[a][b] for a,b in legs)
+            meters = max(0, total_meters - distances[0][1])
+            minutes = max(0, total_seconds - durations[0][1]) / 60
+            if best is None or (meters,total_seconds,total_meters) < (best['meters'],best['_seconds'],best['_total_meters']):
+                best = dict(meters=meters,km=round(meters/1000,2),extra_minutes=round(minutes),_seconds=total_seconds,_total_meters=total_meters,
+                    total_km=round(total_meters/1000,2),base_km=round(distances[0][1]/1000,2),total_minutes=round(total_seconds/60),order=list(order),
                     stops=[matrix.get('places',{}).get(i,{'store':s}) for i,s in zip(chosen,order)],base=matrix['base'])
+    if best:
+        best.pop('_seconds');best.pop('_total_meters')
     return best

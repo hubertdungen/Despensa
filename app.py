@@ -24,6 +24,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from catalog import STORE_MAP, cents, fold, product_text
 from planner import make_plan
 
+APP_VERSION = '0.5.1'
 ROOT = Path(__file__).resolve().parent
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, password TEXT NOT NULL, created TEXT NOT NULL);
@@ -189,7 +190,7 @@ def create_app(data_dir=None, testing=False):
     def health():
         with database() as db:
             db.execute('SELECT 1')
-        return jsonify(ok=True, app='Despensa', version='0.5.0')
+        return jsonify(ok=True, app='Despensa', version=APP_VERSION)
 
     login_attempts = {}
     login_lock = threading.Lock()
@@ -611,7 +612,7 @@ def create_app(data_dir=None, testing=False):
             count = db.execute("SELECT count(*) FROM offers WHERE user_id='' OR user_id=?", (g.user['id'],)).fetchone()[0]
             meta = {r['key']: json.loads(r['value']) for r in db.execute('SELECT * FROM meta')}
             sources = {r['store']: json.loads(r['data']) for r in db.execute('SELECT * FROM research_sources')}
-        return jsonify(jobs=jobs, offer_count=count, meta=meta, sources=sources)
+        return jsonify(version=APP_VERSION,jobs=jobs, offer_count=count, meta=meta, sources=sources)
 
     @app.post('/api/purchases')
     @require_user
@@ -651,8 +652,8 @@ def create_app(data_dir=None, testing=False):
             ref=p.get('reference_store','')
             candidates=[] if d.get('offline') or day!=date.today().isoformat() else [o for o in get_offers(g.user['id']) if o['store']==ref and eligible(o,p,day) and match(item_for_comparison,o)]
             from planner import purchase_cost
-            benchmark=min(candidates,key=lambda o:purchase_cost(o,quantity)[1]) if candidates else None
-            reference_cents=purchase_cost(benchmark,quantity)[1] if benchmark else None
+            benchmark=min(candidates,key=lambda o:purchase_cost(o,quantity,item['unit'])[1]) if candidates else None
+            reference_cents=purchase_cost(benchmark,quantity,item['unit'])[1] if benchmark else None
             reference_kind='catalog' if benchmark else None
             manual_reference=d.get('reference_price')
             if manual_reference not in ('',None):

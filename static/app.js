@@ -1,4 +1,5 @@
 "use strict";
+const APP_VERSION = "0.5.1";
 const $ = (s) => document.querySelector(s);
 const esc = (x) =>
   String(x ?? "").replace(
@@ -645,7 +646,7 @@ function render() {
     ["queued", "running"].includes(j.status),
   );
   $("#app").innerHTML =
-    `<div class="shell"><aside class="sidebar"><a class="brand" href="/"><img src="/logo.svg" alt=""><div><strong>despensa<span>.</span></strong><span>${t("tagline")}</span></div></a>${nav()}<div class="side-note">${icon("leaf", "sprout")}<strong>${t("greeting")}</strong><p>${t("intro")}</p></div><div class="side-foot"><span class="dot"></span> Portugal & España <span>·</span> v0.5</div></aside><div class="workspace"><header class="topbar"><div class="breadcrumb">Despensa ${icon("chevron")}<b>${t(state.view)}</b></div><a class="mobile-brand" href="/"><img src="/logo.svg" alt="">despensa.</a><div class="top-actions"><span class="top-date">${new Date().toLocaleDateString(locale, { day: "numeric", month: "long" })}</span><button class="quiet small" data-action="refresh" title="${t("refresh")}" aria-label="${t("refresh")}" ${active ? "disabled" : ""}>${icon("refresh", active ? "spinner" : "")}<span class="refresh-label">${t(active ? "updating" : "refresh")}</span></button><button class="avatar" data-view="profile" title="${esc(state.user.username)}" aria-label="${t("profile")}">${esc(state.user.username.slice(0, 2).toUpperCase())}</button></div></header>${state.offline || readQueue().length ? `<div class="offline-banner" role="status">${state.offline ? t("offline") : `${readQueue().length} ${t("pending")}`}</div>` : ""}<main class="content" id="main">${{ list: renderList, explore: renderExplore, plan: renderPlan, profile: renderProfile }[state.view]()}</main></div></div>${nav(true)}`;
+    `<div class="shell"><aside class="sidebar"><a class="brand" href="/"><img src="/logo.svg" alt=""><div><strong>despensa<span>.</span></strong><span>${t("tagline")}</span></div></a>${nav()}<div class="side-note">${icon("leaf", "sprout")}<strong>${t("greeting")}</strong><p>${t("intro")}</p></div><div class="side-foot"><span class="dot"></span> Portugal & España <span>·</span> v${APP_VERSION}</div></aside><div class="workspace"><header class="topbar"><div class="breadcrumb">Despensa ${icon("chevron")}<b>${t(state.view)}</b></div><a class="mobile-brand" href="/"><img src="/logo.svg" alt="">despensa.</a><div class="top-actions"><span class="top-date">${new Date().toLocaleDateString(locale, { day: "numeric", month: "long" })}</span><button class="quiet small" data-action="refresh" title="${t("refresh")}" aria-label="${t("refresh")}" ${active ? "disabled" : ""}>${icon("refresh", active ? "spinner" : "")}<span class="refresh-label">${t(active ? "updating" : "refresh")}</span></button><button class="avatar" data-view="profile" title="${esc(state.user.username)}" aria-label="${t("profile")}">${esc(state.user.username.slice(0, 2).toUpperCase())}</button></div></header>${state.offline || readQueue().length ? `<div class="offline-banner" role="status">${state.offline ? t("offline") : `${readQueue().length} ${t("pending")}`}</div>` : ""}<main class="content" id="main">${{ list: renderList, explore: renderExplore, plan: renderPlan, profile: renderProfile }[state.view]()}</main></div></div>${nav(true)}`;
   bind();
   if (quickDraft && $("#quick-add input")) {
     $("#quick-add input").value = quickDraft;
@@ -740,7 +741,7 @@ function renderList() {
                         offer: { store: receipt.store, name: item.name },
                       }
                     : bestForItem(item);
-                  return `<div class="item ${item.checked ? "checked" : ""}"><button class="check ${item.checked ? "done" : ""}" data-check="${item.id}" aria-label="${esc(item.name)}" aria-pressed="${!!item.checked}">${item.checked ? icon("check") : ""}</button>${offerVisual(choice?.offer, item.name)}<div class="item-info"><div class="item-name">${esc(item.name)}</div><div class="item-meta"><span>${item.quantity} ${esc(item.unit)}</span>${item.needed_on ? `<span>${dateText(item.needed_on)}</span>` : ""}${item.offer_id ? `<span>${icon("pin")}</span>` : ""}</div></div><div class="item-price">${choice ? money(choice.cost_cents) : "—"}<small>${choice ? `${receipt ? ft("paidShort") + " · " : ""}${esc(storeName(choice.offer.store))}` : t("noPrice")}</small></div><button class="quiet more" data-edit="${item.id}" aria-label="${t("edit")}: ${esc(item.name)}">${icon("more")}</button></div>`;
+                  return `<div class="item ${item.checked ? "checked" : ""}"><button class="check ${item.checked ? "done" : ""}" data-check="${item.id}" aria-label="${esc(item.name)}" aria-pressed="${!!item.checked}">${item.checked ? icon("check") : ""}</button>${offerVisual(choice?.offer, item.name)}<div class="item-info"><div class="item-name">${esc(item.name)}</div><div class="item-meta"><span>${item.quantity} ${esc(choice?.quantity_basis === "packages" ? ft(item.quantity === 1 ? "package" : "packages") : item.unit)}</span>${item.needed_on ? `<span>${dateText(item.needed_on)}</span>` : ""}${item.offer_id ? `<span>${icon("pin")}</span>` : ""}</div></div><div class="item-price">${choice ? money(choice.cost_cents) : "—"}<small>${choice ? `${receipt ? ft("paidShort") + " · " : ""}${esc(storeName(choice.offer.store))}` : t("noPrice")}</small></div><button class="quiet more" data-edit="${item.id}" aria-label="${t("edit")}: ${esc(item.name)}">${icon("more")}</button></div>`;
                 })
                 .join("")}`,
           )
@@ -781,13 +782,13 @@ function renderProducts() {
 }
 function renderPlan() {
   const result = state.plan;
-  return `${title("planTitle", "planSubtitle")}<div class="toolbar"><label for="plan-day" class="muted">${t("date")}</label><input type="date" id="plan-day" value="${state.day}"><select id="route-mode" aria-label="${t("routeMode")}"><option value="auto" ${state.route === "auto" ? "selected" : ""}>${t("routeMode")}</option><option value="home" ${state.route === "home" ? "selected" : ""}>${t("homeRoute")}</option><option value="work" ${state.route === "work" ? "selected" : ""}>${t("workRoute")}</option></select><button class="primary" data-action="plan">${icon("route")}${t("calculate")}</button></div><div class="notice">${icon("shield")}<span>${t("planNotice")}</span></div>${state.day > today() ? `<div class="notice amber">${icon("calendar")}<span>${t("futureNotice")}</span></div>` : ""}${result?.missing?.length ? `<div class="notice amber">${icon("search")}<span><b>${t("missing")}:</b> ${result.missing.map(esc).join(", ")}</span></div>` : ""}${
+  return `${title("planTitle", "planSubtitle")}<div class="toolbar"><label for="plan-day" class="muted">${t("date")}</label><input type="date" id="plan-day" value="${state.day}"><select id="route-mode" aria-label="${t("routeMode")}"><option value="auto" ${state.route === "auto" ? "selected" : ""}>${t("routeMode")}</option><option value="home" ${state.route === "home" ? "selected" : ""}>${t("homeRoute")}</option><option value="work" ${state.route === "work" ? "selected" : ""}>${t("workRoute")}</option></select><button class="primary" data-action="plan">${icon("route")}${t("calculate")}</button></div><p id="plan-loading" role="status" ${state.planLoading ? "" : "hidden"}>${ft("routeLoading")}</p><div class="notice">${icon("shield")}<span>${t("planNotice")}</span></div>${state.day > today() ? `<div class="notice amber">${icon("calendar")}<span>${t("futureNotice")}</span></div>` : ""}${result?.missing?.length ? `<div class="notice amber">${icon("search")}<span><b>${t("missing")}:</b> ${result.missing.map(esc).join(", ")}</span></div>` : ""}${
     result?.plans?.length
       ? result.plans
           .slice(0, 6)
           .map(
             (p, index) =>
-              `<article class="plan-card ${index === 0 ? "best" : ""}"><header><div>${index === 0 ? `<span class="tag">${t("best")}</span>` : ""}${!p.complete ? `<span class="tag amber">${t("partial")}</span>` : ""}<h3>${p.stores.map((s) => esc(storeName(s))).join(" + ")}</h3><span class="muted">${p.coverage} / ${p.total_items} ${t("coverageLabel")}</span></div><div class="plan-total">${money(p.total_cents)}<div class="muted total-note">${t(p.travel_cents === null ? "subtotal" : "total")}</div></div></header><div class="plan-metrics"><span>${t("basket")}: <b>${money(p.basket_cents)}</b></span><span>${icon("route")} ${p.extra_km === null ? ft("distance_" + (p.distance_reason || "not_requested")) : `${p.extra_km} km · ${money(p.travel_cents)} · ${t(p.distance_method === "road" ? "routeReal" : "distanceEstimate")}`}</span>${p.balance_cents ? `<span>${t("futureBalance")}: ${money(p.balance_cents)}</span>` : ""}</div><div class="plan-products">${p.selections.map((s) => `<div class="plan-product"><div>${esc(s.item_name)}<small>${esc(s.offer.name)} · ${s.packs} × ${esc(s.offer.pack)} · ${esc(storeName(s.offer.store))}</small></div><b>${money(s.cost_cents)}</b></div>`).join("")}</div>${routeItinerary(p)}</article>`,
+              `<article class="plan-card ${index === 0 && p.complete ? "best" : ""}"><header><div>${index === 0 && p.complete ? `<span class="tag">${t("best")}</span>` : ""}${!p.complete ? `<span class="tag amber">${t("partial")}</span>` : ""}<h3>${p.stores.map((s) => esc(storeName(s))).join(" + ")}</h3><span class="muted">${p.coverage} / ${p.total_items} ${t("coverageLabel")}</span></div><div class="plan-total">${money(p.total_cents)}<div class="muted total-note">${t(p.travel_cents === null ? "subtotal" : "total")}</div></div></header>${p.missing?.length ? `<div class="notice amber missing-products"><b>${ft("missingInPlan")}:</b> ${p.missing.map(esc).join(", ")}</div>` : ""}<div class="plan-metrics"><span>${t("basket")}: <b>${money(p.basket_cents)}</b></span><span>${icon("route")} ${planDistance(p)}</span>${p.balance_cents ? `<span>${t("futureBalance")}: ${money(p.balance_cents)}</span>` : ""}</div><div class="plan-products">${p.selections.map((s) => `<div class="plan-product"><div>${esc(s.item_name)}<small>${esc(s.offer.name)} · ${s.packs} ${s.quantity_basis === "packages" ? ft(s.packs === 1 ? "package" : "packages") + " de" : "×"} ${esc(s.offer.pack)} · ${esc(storeName(s.offer.store))}</small></div><b>${money(s.cost_cents)}</b></div>`).join("")}</div>${routeItinerary(p)}</article>`,
           )
           .join("")
       : empty(
@@ -845,7 +846,7 @@ function itemModal(item = null, offer = null, quickName = "", group = null) {
   };
   openModal(
     item ? "edit" : "add",
-    `<form id="item-form"><div class="form-grid">${field("name", "product", d.name, "text", 'required maxlength="160"')}${field("query", "query", d.query, "text", 'required minlength="2" maxlength="120"', "queryHint")}<div class="field full"><div id="item-suggestions" class="item-suggestions" aria-live="polite"></div></div>${field("quantity", "quantity", d.quantity, "number", 'required min="0.001" max="10000" step="0.001"')}<div class="field"><label for="f-unit">${t("unit")}</label><select id="f-unit" name="unit">${["un", "kg", "l"].map((u) => `<option ${d.unit === u ? "selected" : ""}>${u}</option>`).join("")}</select></div><div class="field"><label for="f-category">${t("category")}</label><select id="f-category" name="category">${["Mercearia", "Laticínios", "Frescos", "Casa e limpeza", "Outros"].map((c) => `<option value="${esc(c)}" ${d.category === c ? "selected" : ""}>${esc(categoryName(c))}</option>`).join("")}</select></div>${field("needed_on", "needed", d.needed_on, "date")}<div class="field full"><label for="f-note">${t("note")}</label><textarea id="f-note" name="note" maxlength="300">${esc(d.note)}</textarea></div></div><div class="notice">${icon("search")}<span id="item-kind">${t(d.offer_id ? "lockedItem" : "genericItem")}</span></div><div class="form-actions">${item ? `<button type="button" class="quiet" id="record-item-purchase">${icon("wallet")}${ft("addPurchase")}</button><button type="button" class="quiet danger" id="delete-item">${icon("trash")}${t("delete")}</button>` : ""}<button type="button" data-cancel>${t("cancel")}</button><button class="primary" type="submit">${t("save")}</button></div></form>`,
+    `<form id="item-form"><div class="form-grid">${field("name", "product", d.name, "text", 'required maxlength="160"')}${field("query", "query", d.query, "text", 'required minlength="2" maxlength="120"', "queryHint")}<div class="field full"><div id="item-suggestions" class="item-suggestions" aria-live="polite"></div></div>${field("quantity", "quantity", d.quantity, "number", 'required min="0.001" max="10000" step="0.001"')}<div class="field"><label for="f-unit">${t("unit")}</label><select id="f-unit" name="unit">${["un", "kg", "l"].map((u) => `<option ${d.unit === u ? "selected" : ""}>${u}</option>`).join("")}</select></div><div class="field"><label for="f-category">${t("category")}</label><select id="f-category" name="category">${["Mercearia", "Laticínios", "Frescos", "Casa e limpeza", "Outros"].map((c) => `<option value="${esc(c)}" ${d.category === c ? "selected" : ""}>${esc(categoryName(c))}</option>`).join("")}</select></div>${field("needed_on", "needed", d.needed_on, "date")}<p class="field full muted">${ft("packageHint")}</p><div class="field full"><label for="f-note">${t("note")}</label><textarea id="f-note" name="note" maxlength="300">${esc(d.note)}</textarea></div></div><div class="notice">${icon("search")}<span id="item-kind">${t(d.offer_id ? "lockedItem" : "genericItem")}</span></div><div class="form-actions">${item ? `<button type="button" class="quiet" id="record-item-purchase">${icon("wallet")}${ft("addPurchase")}</button><button type="button" class="quiet danger" id="delete-item">${icon("trash")}${t("delete")}</button>` : ""}<button type="button" data-cancel>${t("cancel")}</button><button class="primary" type="submit">${t("save")}</button></div></form>`,
   );
   setupItemSuggestions(d, !item);
   $("#item-form").onsubmit = async (e) => {
@@ -1003,25 +1004,27 @@ async function fetchCatalog({
   state.catalogSignature = signature;
   saveSnapshot();
 }
+let planSequence = 0;
 async function loadPlan() {
   if (state.offline) return;
+  const seq = ++planSequence, roads = state.view === "plan";
+  state.planLoading = roads;
+  if ($("#plan-loading")) $("#plan-loading").hidden = !roads;
   try {
-    state.plan = await api(
-      "/plan?month=" +
-        state.month +
-        "&day=" +
-        state.day +
-        "&route=" +
-        state.route +
-        "&roads=" +
-        (state.view === "plan"),
-    );
+    const result = await api(`/plan?month=${state.month}&day=${state.day}&route=${state.route}&roads=${roads}`);
+    if (seq !== planSequence || roads !== (state.view === "plan")) return;
+    state.plan = result;
+    state.planLoading = false;
     if (["list", "plan"].includes(state.view)) render();
   } catch (err) {
+    if (seq !== planSequence) return;
+    state.planLoading = false;
+    if ($("#plan-loading")) $("#plan-loading").hidden = true;
     if (err.network) state.offline = true;
     else toast(err.message);
   }
 }
+
 async function load() {
   try {
     const me = await api("/me");
@@ -1450,6 +1453,7 @@ setInterval(async () => {
       ]);
     const status = await api("/status");
     state.status = status;
+    showAppUpdate(status.version);
     if (
       (previous !== JSON.stringify(status.jobs) || budgetChanged) &&
       state.view !== "profile" &&

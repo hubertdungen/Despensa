@@ -1936,3 +1936,5 @@ dialog::backdrop {
 .query-source-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px; margin-top:16px; }
 .query-source-grid small { display:block; color:var(--muted); margin-top:4px; }
 .catalog-more { display:flex; justify-content:center; margin:24px 0; }
+#app-update { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 100; max-width: calc(100% - 24px); box-shadow: 0 4px 24px #173e3020; }
+.missing-products { margin: 0 24px 16px; display: block; }

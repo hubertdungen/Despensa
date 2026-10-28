@@ -6,9 +6,12 @@ from datetime import datetime, timezone
 from catalog import fold, product_text, STORE_MAP
 
 
-def purchase_cost(offer, quantity):
+def purchase_cost(offer, quantity, unit=None):
     """Loose produce uses its requested weight; sealed packs remain indivisible."""
-    if offer.get('variable_weight'):
+    if unit=='un' and offer.get('unit') in ('kg','l') and not offer.get('variable_weight'):
+        packs=math.ceil(quantity)
+        cost=packs*offer['price_cents']
+    elif offer.get('variable_weight'):
         amount=max(float(quantity),offer.get('minimum_quantity') or 0)
         if offer.get('weight_step'):
             step=offer['weight_step']
@@ -75,14 +78,15 @@ def eligible(offer,prefs,day,now=None):
 
 
 def match(item, offer):
-    if not offer.get('size') or item['unit'] != offer['unit']:
+    package_count=item['unit']=='un' and offer.get('unit') in ('kg','l') and not offer.get('variable_weight')
+    if not offer.get('size') or (item['unit'] != offer['unit'] and not package_count):
         return False
     if item.get('offer_id'):
         return item['offer_id'] == offer['id']
     if item.get('family'):
         from products import family
         return family(offer)['key'] == item['family']
-    from searching import rank,tokens as search_tokens
+    from searching import rank,tokens as search_tokens,product_query
     tokens=search_tokens(item['query'])
     words=set(search_tokens(offer['name']))
     # Conservative family exclusions: generic eggs are not quail/chocolate eggs,
@@ -102,7 +106,7 @@ def match(item, offer):
     for family, exclusions in families.items():
         if search_tokens(family)[0] in tokens and (words & set(search_tokens(' '.join(sorted(exclusions))))) - set(tokens):
             return False
-    return bool(tokens) and bool(rank(item['query'],offer['name'],offer.get('brand',''),offer.get('pack','')))
+    return bool(tokens) and bool(rank(product_query(item['query']),offer['name'],offer.get('brand',''),offer.get('pack','')))
 
 
 def make_plan(items, offers, prefs, day, now=None, road=None):
@@ -112,9 +116,10 @@ def make_plan(items, offers, prefs, day, now=None, road=None):
         candidates = []
         for o in offers:
             if eligible(o, prefs, day, now) and match(item, o):
-                packs,cost = purchase_cost(o,item['quantity'])
+                packs,cost = purchase_cost(o,item['quantity'],item['unit'])
                 candidates.append(dict(item_id=item['id'], item_name=item['name'], offer=o,
                     packs=packs, cost_cents=cost, estimated=bool(o.get('variable_weight')),
+                    quantity_basis='packages' if item['unit']=='un' and o['unit'] in ('kg','l') else 'content',
                     balance_cents=round(packs * o.get('balance_cents', 0))))
         choices[item['id']] = sorted(candidates, key=lambda c: c['cost_cents'])
     missing = [i['name'] for i in pending if not choices[i['id']]]
@@ -136,6 +141,7 @@ def make_plan(items, offers, prefs, day, now=None, road=None):
             travel = round(km * float(prefs.get('cost_per_km', .2)) * 100) if km is not None else None
             basket = sum(c['cost_cents'] for c in found)
             plans.append(dict(stores=used, selections=found, coverage=len(found), total_items=len(pending),
+                missing=[i['name'] for i,c in zip(pending,selected) if not c],
                 complete=len(found) == len(pending), basket_cents=basket, travel_cents=travel,
                 total_cents=basket + travel if travel is not None else basket,
                 extra_km=km, route=route, distance_method='road' if route else 'unavailable', balance_cents=sum(c['balance_cents'] for c in found)))

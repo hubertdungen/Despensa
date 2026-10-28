@@ -643,7 +643,7 @@ def query_progress(db, query, stores, owner):
 
 def search_store(app, task, page_limit=6):
     """Give an explicit search its own bounded work, independent of catalogue sweeps."""
-    from searching import rank, STOPWORDS, discovery_query, intent_bonus
+    from searching import rank, STOPWORDS, discovery_query, intent_bonus, product_query
     store,query=task['store'],task['query']
     now=time.time()
     with app.database() as db:
@@ -685,7 +685,7 @@ def search_store(app, task, page_limit=6):
         # including products whose sitemap URL has no brand/format information.
         # Other retailers' blocked search routes are never used as substitutes.
         if store=='auchan':
-            public_query=re.sub(r'\blinha\s+(?:e\s+)?fibra\b',' ',query) if 'cereal' in discovery else query
+            public_query=' '.join(w for w in product_query(query).split() if w not in STOPWORDS)
             url=root+'/pt/pesquisa?q='+quote(public_query)
             if rules.can_fetch('Despensa',url):
                 with app.database() as db:

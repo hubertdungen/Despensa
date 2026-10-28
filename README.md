@@ -7,7 +7,7 @@
 
 Despensa é uma aplicação de compras pessoais que pode alojar no seu computador ou NAS. Organiza listas mensais, guarda as suas preferências e compara os produtos para os quais existem preços observados. A interface funciona em português europeu e espanhol, no computador e no telemóvel.
 
-**Versão 0.5: sugestões com detalhes, localizações persistentes e folhetos oficiais.** A aplicação descobre páginas, combina vários métodos de leitura, guarda o progresso e repete fontes que falham. O radar mostra a cobertura efetivamente conseguida em cada loja; uma fonte sem resposta nunca aparece como um preço encontrado.
+**Versão 0.5.1: sugestões com detalhes, localizações persistentes e folhetos oficiais.** A aplicação descobre páginas, combina vários métodos de leitura, guarda o progresso e repete fontes que falham. O radar mostra a cobertura efetivamente conseguida em cada loja; uma fonte sem resposta nunca aparece como um preço encontrado.
 
 ## O que já pode fazer
 
@@ -25,7 +25,7 @@ Despensa é uma aplicação de compras pessoais que pode alojar no seu computado
 - Consultar automaticamente o folheto digital oficial do Recheio, com validade e preços Cash sem IVA explicitamente identificados e excluídos dos planos pessoais. O catálogo público da Makro PT permite descobrir referências, mas continua a pedir sessão da loja para revelar preços.
 - Registar preços de lojas físicas de Portugal e Espanha, incluindo Makro e Recheio, formato, IVA, localização, validade, cartão, subscrição ou cupão específico.
 - Definir lojas acessíveis, cartões e códigos de cupão. Subscrições aparecem apenas onde existe um programa identificado: EntregaZero é uma subscrição de entregas, sem assumir descontos nos produtos.
-- Comparar até três lojas por ida, comprando embalagens inteiras. Os cabazes incompletos são identificados e nunca vencem um completo por omitir produtos.
+- Comparar até três lojas por ida, comprando embalagens inteiras. Em produtos embalados com conteúdo em kg/l, «1 un» pede uma embalagem; «1 kg» pede massa suficiente e pode precisar de várias. O formato escolhido fica visível. Os cabazes incompletos são identificados e nunca vencem um completo por omitir produtos.
 - Separar o valor pago hoje do saldo futuro em cartão.
 - Localizar casa e trabalho, guardando imediatamente cada localização escolhida, descobrir lojas perto de ambos e estimar automaticamente os quilómetros, os desvios e a ordem das paragens. Nos dias de trabalho considera trabalho→lojas→casa; noutros dias, casa→lojas→casa. O plano explica se faltam coordenadas, uma filial próxima ou uma resposta do serviço de percursos.
 - Acompanhar o orçamento do Rumo para o mês selecionado, atualizado automaticamente através de uma exportação limitada às despesas de supermercado.

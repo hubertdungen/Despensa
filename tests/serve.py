@@ -34,10 +34,10 @@ with tempfile.TemporaryDirectory(prefix='despensa-e2e-') as folder:
                 price_cents=199,condition='public',observed_at=datetime.now(timezone.utc).isoformat(),
                 vat_included=True,pack='7 l',source_url='',source_kind='automatic')
             db.execute('INSERT INTO offers VALUES(?,?,?,?)',(o['id'],'',o['store'],json.dumps(o)))
-            for oid,name,brand,pack,size in [('delta-ground','Café Moído Brasil','Delta','220 g',.22),('delta-beans','Café em Grão Gold','Delta','500 g',.5),('fitness','Cereais Trigo e Aveia Integral','Fitness','625 g',.625)]:
+            for oid,name,brand,pack,size in [('delta-ground','Café Moído Brasil','Delta','220 g',.22),('delta-beans','Café em Grão Gold','Delta','500 g',.5),('fitness','Cereais Trigo e Aveia Integral','Fitness','625 g',.625),('fitness-fibre','Cereais Fitness Mel Fibra','Fitness','310 g',.31)]:
                 o=dict(id=oid,store='auchan',country='PT',name=name,brand=brand,size=size,unit='kg',pack=pack,
                     price_cents=369,condition='public',vat_included=True,observed_at=datetime.now(timezone.utc).isoformat(),
-                    category='Mercearia / Cereais Linha e Fibra' if oid=='fitness' else 'Café',source_url='',source_kind='automatic')
+                    category='Mercearia / Cereais Linha e Fibra' if oid=='fitness-fibre' else 'Café' if oid.startswith('delta') else '',source_url='',source_kind='automatic')
                 db.execute('INSERT INTO offers VALUES(?,?,?,?)',(oid,'',o['store'],json.dumps(o)))
     seed(local)
     secret=root/'proxy-secret';secret.write_text('browser-test-proxy-secret-'*3)

@@ -215,3 +215,29 @@ def test_specific_suggestions_fill_published_pack_and_keep_brand(tmp_path):
     assert 'Delta' in details['coffee']['query']
     assert details['capsule']['quantity']==10 and details['capsule']['unit']=='un'
     assert all(d['category']=='Mercearia' for d in details.values())
+
+
+def test_category_hits_do_not_hide_original_and_articles_do_not_block_search():
+    original=offer('original','Cereais Nestlé Fitness Original',brand='Nestlé',category='',pack='625 g',size=.625,unit='kg')
+    fibre=offer('fibre','Cereais Fitness Mel Fibra',brand='Fitness',category='Cereais Linha e Fibra',pack='310 g',size=.31,unit='kg')
+    wrong=offer('other','Cereais Linha Fibra',brand='Nacional',category='Cereais Linha e Fibra')
+    for query in ('Cereais Linha e Fibra Fitness','Os Cereais Linha e Fibra Fitness'):
+        rows,related=find([original,fibre,wrong],query)
+        assert {o['id'] for o in rows}=={'original','fibre'} and related
+    assert not find([original,fibre],'Os Cereais Linha e Fibra Fitness sem açúcar')[0]
+    assert not find([original,fibre],'Os Cereais Linha e Fibra Fitness sem glúten')[0]
+    assert not find([original,fibre],'Os Cereais Linha e Fibra Fitness 500g')[0]
+
+
+def test_cereal_search_and_plan_cover_one_package_instead_of_requiring_one_kg(tmp_path):
+    app,c=client(tmp_path)
+    row=offer('original','Cereais Fitness Original',brand='Fitness',pack='625 g',size=.625,unit='kg')
+    save(app,[row])
+    item=dict(name='Cereais Linha e Fibra Fitness',query='Cereais Linha e Fibra Fitness',quantity=1,unit='un')
+    assert c.post('/api/items',json=item).status_code==201
+    plan=c.get('/api/plan').json['plans'][0]
+    assert plan['complete'] and not plan['missing']
+    selection=plan['selections'][0]
+    assert selection['packs']==1 and selection['cost_cents']==row['price_cents']
+    assert selection['quantity_basis']=='packages'
+    assert c.get('/api/offers?q=Os+Cereais+Linha+e+Fibra+Fitness&investigate=false').json['total']==1

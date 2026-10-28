@@ -73,3 +73,11 @@ As sugestões incluem referências individuais, mesmo quando não existe uma fam
 As alternativas avaliadas são páginas de produto/categoria, pesquisa pública permitida, dados estruturados, catálogos anónimos e folhetos oficiais. Uma integração com contas de supermercado ainda não está implementada. Não recolhemos credenciais nem apresentamos índices de terceiros como preços confirmados da loja.
 
 O leitor de robots aplica wildcards e precedência da regra mais específica. Para os assets públicos de folhetos no CDN iPaper, a inexistência do recurso robots (403/404) segue [RFC 9309, 2.3.1.3](https://www.rfc-editor.org/rfc/rfc9309.html#section-2.3.1.3). Erros de rede/5xx e bloqueios dos próprios assets continuam a interromper a leitura. Os URLs admitidos pertencem apenas ao CDN e à publicação oficial.
+
+### Correções 0.5.1
+
+A pesquisa ignora artigos como “os/as” e acrescenta resultados de Fitness Original mesmo quando já encontrou variantes com “Linha/Fibra” no nome ou categoria. Marca, formato e restrições dietéticas mantêm-se obrigatórios. Os resultados adicionais sem categoria publicada são assinalados como relacionados.
+
+Quando um item pede unidades e a loja publica uma embalagem fechada em kg/l, cada unidade representa uma embalagem, com o formato explícito no plano. Por exemplo, 1 un de cereais 625 g compra uma embalagem; 1 kg exige duas embalagens de 625 g. Não se aplica esta conversão a fruta/carne vendida a peso, nem se alteram as quantidades guardadas. O mesmo cálculo é usado na referência de poupança de uma compra.
+
+Cada alternativa identifica os produtos em falta. Apenas um cabaz completo pode receber a etiqueta “Plano sugerido”. O percurso mostra quilómetros e minutos totais, trajeto habitual e desvio/custo adicionais. Um desvio de 0 km não significa uma viagem de 0 km. Respostas antigas da lista não podem substituir um cálculo rodoviário mais recente. A app avisa quando deteta uma versão nova no servidor, permitindo atualizar a interface.

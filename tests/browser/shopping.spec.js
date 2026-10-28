@@ -162,7 +162,7 @@ test('coffee and cereal suggestions fill details and preserve an edited quantity
   await page.locator('#f-quantity').fill('3');
   await page.locator('[data-suggestion]').first().click();
   await expect(page.locator('#f-quantity')).toHaveValue('3');
-  await expect(page.locator('#f-unit')).toHaveValue('kg');
+  await expect(page.locator('#f-unit')).toHaveValue('un');
   await expect(page.locator('#f-query')).toHaveValue(/Fitness/);
   await page.locator('#item-form button[type=submit]').click();
   await expect(page.locator('.item-name')).toContainText('Cereais');
@@ -214,4 +214,81 @@ test('a failed geocoder still saves the typed address for a later retry',async({
   const profile=(await(await saved).json()).profile;
   expect(profile.home).toBe('Casa por localizar');expect(profile.home_coords).toBeNull();
   await expect(page.locator('#toast')).toContainText('Moradas guardadas');
+});
+
+test('Fitness Original remains discoverable beside fibre variants and a unit buys one pack',async({page})=>{
+  await page.goto('/');await page.locator('#auth-toggle').click();
+  await page.locator('#username').fill('fitness-original-test');await page.locator('#password').fill('temporary-test-password-2026');
+  await page.locator('#auth-form button[type=submit]').click();await expect(page.locator('#quick-add')).toBeVisible();
+  await page.locator('#quick-add input').fill('Os Cereais Linha e Fibra Fitness');await page.locator('#quick-add button').click();
+  await expect(page.locator('[data-suggestion]').filter({hasText:'Trigo e Aveia'})).toHaveCount(1);
+  await expect(page.locator('[data-suggestion]')).toHaveCount(2);
+  await page.locator('#item-form button[type=submit]').click();
+  await page.locator('.mobile-nav [data-view=plan]').click();
+  await expect(page.locator('.plan-card').first()).toContainText('1 / 1');
+  await expect(page.locator('.plan-card').first().locator('header')).toContainText('Plano sugerido');
+  await expect(page.locator('.plan-card').first()).not.toContainText('Cabaz incompleto');
+  await expect(page.locator('.plan-products').first()).toContainText('1 embalagem');
+  await page.locator('.mobile-nav [data-view=explore]').click();
+  await page.locator('#catalog-search').fill('Os Cereais Linha e Fibra Fitness');
+  await expect(page.locator('.comparison-card').filter({hasText:'Trigo e Aveia'})).toHaveCount(1);
+});
+
+test('partial baskets show missing products and separate total route from extra kilometres',async({page})=>{
+  await page.route('**/api/plan?**',async route=>{
+    const response=await route.fetch(),data=await response.json();
+    if(new URL(route.request().url()).searchParams.get('roads')==='true') {
+      data.plans=data.plans.map(p=>({...p,extra_km:0,travel_cents:0,distance_reason:null,distance_method:'road',route:{total_km:9.32,base_km:9.32,total_minutes:15,extra_minutes:0,base:'work',stops:[{name:'Loja de teste',store:'auchan'}]}}));
+      data.distance_method='road';
+    }
+    await route.fulfill({response,json:data});
+  });
+  await page.goto('/');await page.locator('#auth-toggle').click();
+  await page.locator('#username').fill('partial-route-test');await page.locator('#password').fill('temporary-test-password-2026');
+  await page.locator('#auth-form button[type=submit]').click();await expect(page.locator('#quick-add')).toBeVisible();
+  for(const name of ['Leite','Produto sem catálogo']) {
+    await page.locator('#quick-add input').fill(name);await page.locator('#quick-add button').click();
+    if(name==='Leite') await page.locator('#f-unit').selectOption('l');
+    await page.locator('#item-form button[type=submit]').click();
+  }
+  await page.locator('.mobile-nav [data-view=plan]').click();
+  const card=page.locator('.plan-card').first();
+  await expect(card).toContainText('Cabaz incompleto');
+  await expect(card.locator('header')).not.toContainText('Plano sugerido');
+  await expect(card.locator('.missing-products')).toContainText('Produto sem catálogo');
+  await expect(card.locator('.plan-metrics')).toContainText('Percurso total: 9,32 km');
+  await expect(card.locator('.plan-metrics')).toContainText('+0 km adicionais');
+  await expect(card.locator('.plan-metrics')).toContainText('Custo adicional:');
+  await page.unrouteAll({behavior:'wait'});
+});
+
+test('a later list response cannot overwrite a calculated road plan',async({page})=>{
+  await page.goto('/');await page.locator('#auth-toggle').click();
+  await page.locator('#username').fill('route-race-test');await page.locator('#password').fill('temporary-test-password-2026');
+  await page.locator('#auth-form button[type=submit]').click();await expect(page.locator('#quick-add')).toBeVisible();
+  const value=await page.evaluate(async()=>{
+    const original=api;let finish;
+    api=async path=>{
+      if(path.startsWith('/plan?')&&path.includes('roads=false')) return new Promise(resolve=>{finish=resolve;});
+      return {plans:[],missing:[],marker:'road'};
+    };
+    try {
+      state.view='list';const older=loadPlan();
+      state.view='plan';await loadPlan();
+      finish({plans:[],missing:[],marker:'list'});await older;
+      return state.plan.marker;
+    } finally {api=original;}
+  });
+  expect(value).toBe('road');
+});
+
+test('the app surfaces a newer server version without discarding a draft',async({page})=>{
+  await page.goto('/');await page.locator('#auth-toggle').click();
+  await page.locator('#username').fill('update-notice-test');await page.locator('#password').fill('temporary-test-password-2026');
+  await page.locator('#auth-form button[type=submit]').click();await expect(page.locator('#quick-add')).toBeVisible();
+  await page.locator('#quick-add input').fill('Cereais Fitness');
+  await page.evaluate(()=>showAppUpdate('999.0.0'));
+  await expect(page.locator('#app-update')).toContainText('atualização');
+  await expect(page.locator('#app-update button')).toHaveText('Atualizar app');
+  await expect(page.locator('#quick-add input')).toHaveValue('Cereais Fitness');
 });

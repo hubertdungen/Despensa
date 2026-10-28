@@ -163,6 +163,7 @@ def test_asymmetric_road_route_and_commute_baseline():
     result=distance_for(['a','b'],matrix)
     assert result['order']==['a','b']
     assert result['km']==0 and result['extra_minutes']==0
+    assert result['total_km']==10 and result['base_km']==10 and result['total_minutes']==10
     assert distance_for(['unknown'],matrix) is None
 
 
@@ -185,3 +186,34 @@ def test_plan_explains_missing_home_instead_of_silent_null_distance(app,monkeypa
     plans=c.get('/api/plan?roads=true').json['plans']
     assert plans and plans[0]['distance_reason']=='missing_home'
     assert plans[0]['travel_cents'] is None
+
+
+def test_partial_plans_report_the_products_missing_from_each_basket():
+    p=default_profile()
+    a=dict(ITEM,id='a',name='Arroz',query='arroz',quantity=1)
+    b=dict(ITEM,id='b',name='Azeite',query='azeite',quantity=1,unit='l')
+    rice=offer()
+    oil=dict(offer('oil',store='auchan'),name='Azeite',unit='l')
+    plans=make_plan([a,b],[rice,oil],p,'2026-10-25',NOW)['plans']
+    assert plans[0]['complete'] and plans[0]['missing']==[]
+    assert all(plan['missing'] for plan in plans[1:])
+    assert {tuple(plan['missing']) for plan in plans[1:]}=={('Arroz',),('Azeite',)}
+
+
+def test_packages_keep_their_cost_and_loose_produce_requires_weight():
+    from planner import purchase_cost
+    cereal=dict(offer('cereal',size=.625),name='Cereais Fitness',brand='Fitness',pack='625 g')
+    item=dict(ITEM,query='Cereais Linha e Fibra Fitness',unit='un',quantity=1)
+    assert match(item,cereal)
+    assert purchase_cost(cereal,1,'un')==(1,100)
+    assert purchase_cost(cereal,2,'un')==(2,200)
+    assert purchase_cost(cereal,1,'kg')==(2,200)
+    assert not match(dict(item,query='banana'),dict(cereal,name='Banana',variable_weight=True))
+
+
+def test_zero_additional_km_still_reports_total_trip_and_selects_fastest_tied_route():
+    matrix=dict(ids={'a':[2,3]},base='work',distances=[[0,10000,5000,4000],[10000,0,1,1],[1,5000,0,1],[1,4000,1,0]],
+        durations=[[0,600,400,200],[600,0,1,1],[1,400,0,1],[1,200,1,0]],places={2:{'name':'Slow'},3:{'name':'Fast'}})
+    result=distance_for(['a'],matrix)
+    assert result['km']==0 and result['total_km']==8 and result['base_km']==10
+    assert result['stops'][0]['name']=='Fast'

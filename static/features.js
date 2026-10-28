@@ -1,6 +1,18 @@
 /* Product comparisons, nearby branches and recorded monthly savings. */
 const featureCopy = {
   "pt-PT": {
+    totalRoute: "Percurso total",
+    additionalKm: "km adicionais",
+    additionalCost: "Custo adicional",
+    baseline: "Trajeto habitual",
+    routeLoading: "A calcular o percurso…",
+    missingInPlan: "Falta neste cabaz",
+    package: "embalagem",
+    packages: "embalagens",
+    packageHint: "Para embalagens vendidas em kg/l, «un» conta embalagens. Na venda a peso, use kg.",
+    updateAvailable: "Há uma atualização da app disponível.",
+    updateApp: "Atualizar app",
+
     exploreScope:
       "A comparação usa os países selecionados. O plano mantém as lojas e cartões ativos no seu perfil.",
     sameBarcode: "Mesmo código de barras e formato",
@@ -143,6 +155,18 @@ const featureCopy = {
     noGenericSubs: "A loja não tem essa condição de desconto configurada.",
   },
   "es-ES": {
+    totalRoute: "Recorrido total",
+    additionalKm: "km adicionales",
+    additionalCost: "Coste adicional",
+    baseline: "Trayecto habitual",
+    routeLoading: "Calculando el recorrido…",
+    missingInPlan: "Falta en esta cesta",
+    package: "envase",
+    packages: "envases",
+    packageHint: "Para envases vendidos en kg/l, «un» cuenta envases. En venta al peso, usa kg.",
+    updateAvailable: "Hay una actualización de la app disponible.",
+    updateApp: "Actualizar app",
+
     exploreScope:
       "La comparación usa los países seleccionados. El plan mantiene las tiendas y tarjetas activas en su perfil.",
     sameBarcode: "Mismo código de barras y formato",
@@ -387,7 +411,7 @@ function setupItemSuggestions(d, isNew = false) {
         input.value = details.name;
         $("#f-query").value = details.query;
         for (const key of ["quantity", "unit", "category"])
-          if (!dirty.has(key) && details[key]) $("#f-" + key).value = details[key];
+          if (!dirty.has(key) && !(key === "unit" && dirty.has("quantity")) && details[key]) $("#f-" + key).value = details[key];
         $("#item-kind").textContent = t(d.offer_id ? "lockedItem" : "genericItem");
         target.querySelectorAll(".suggestion").forEach(b => b.classList.toggle("selected", b === button));
       });
@@ -623,9 +647,22 @@ function tripModal() {
     }
   };
 }
+const distanceNumber = value => value == null ? "—" : new Intl.NumberFormat(locale, {maximumFractionDigits:2}).format(value);
+function planDistance(plan) {
+  if (plan.extra_km == null) return ft("distance_" + (plan.distance_reason || "not_requested"));
+  return `${ft("totalRoute")}: <b>${distanceNumber(plan.route?.total_km)} km</b> · +${distanceNumber(plan.extra_km)} ${ft("additionalKm")} · ${ft("additionalCost")}: ${money(plan.travel_cents)}`;
+}
+function showAppUpdate(version) {
+  if (!version || version === APP_VERSION || $("#app-update")) return;
+  const notice = document.createElement("div");
+  notice.id = "app-update"; notice.className = "offline-banner"; notice.setAttribute("role", "status");
+  notice.innerHTML = `<span>${ft("updateAvailable")}</span><button type="button" class="quiet small">${ft("updateApp")}</button>`;
+  notice.querySelector("button").onclick = () => window.location.reload();
+  document.body.append(notice);
+}
 function routeItinerary(plan) {
   if (!plan.route?.stops?.length) return "";
-  return `<div class="route-itinerary"><strong>${ft("routeStops")}</strong><p>${t(plan.route.base === "work" ? "work" : "home")} → ${plan.route.stops.map((s) => esc(s.name || storeName(s.store))).join(" → ")} → ${t("home")}</p><small>${plan.route.extra_minutes} min · +${plan.extra_km} km</small></div>`;
+  return `<div class="route-itinerary"><strong>${ft("routeStops")}</strong><p>${t(plan.route.base === "work" ? "work" : "home")} → ${plan.route.stops.map((s) => esc(s.name || storeName(s.store))).join(" → ")} → ${t("home")}</p><small>${plan.route.total_minutes ?? "—"} min · ${ft("totalRoute")}: ${distanceNumber(plan.route.total_km)} km · ${ft("baseline")}: ${distanceNumber(plan.route.base_km)} km · +${plan.route.extra_minutes} min</small></div>`;
 }
 function bindFeatureActions() {
   $("[data-catalog-more]")?.addEventListener("click", async (e) => {

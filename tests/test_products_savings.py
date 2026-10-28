@@ -132,3 +132,17 @@ def test_fruit_varieties_and_meat_cuts_remain_separate():
     assert family(product('Bifes de porco'))['key']!=family(product('Bifes de peru'))['key']
     assert family(product('Ração gato frango'))['key'].startswith('reference:')
     assert family(dict(product('Leite meio gordo proteína'),unit='l'))['label'].endswith('proteína')
+
+
+def test_package_purchase_reference_uses_pack_count_not_kilograms(tmp_path):
+    app=create_app(tmp_path,testing=True);c=app.test_client()
+    c.post('/api/auth/register',json={'username':'packages','password':'temporary-password'})
+    c.put('/api/profile',json={'reference_store':'continente'})
+    row=dict(milk('reference','continente',400),name='Cereais Fitness Original',brand='Fitness',unit='kg',size=.625,pack='625 g')
+    with app.database() as db:
+        db.execute('INSERT INTO offers VALUES(?,?,?,?)',(row['id'],'',row['store'],json.dumps(row)))
+    item=c.post('/api/items',json=dict(name='Cereais Linha e Fibra Fitness',unit='un',quantity=1)).json['item']
+    result=c.post('/api/purchases',json=dict(id='f'*32,item_id=item['id'],store='auchan',paid='3.00'))
+    assert result.status_code==201
+    assert result.json['purchase']['reference_cents']==400
+    assert result.json['purchase']['savings_cents']==100

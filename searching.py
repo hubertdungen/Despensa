@@ -3,14 +3,21 @@ import re
 from functools import lru_cache
 from catalog import product_text
 
-STOPWORDS = {'de','da','do','das','dos','del','la','el','los','las','para','por','con','com','e','y','a','o'}
+STOPWORDS = {'de','da','do','das','dos','del','la','el','los','las','para','por','con','com','e','y','a','o','os','as','um','uma','uns','umas'}
+
+
+def product_query(query):
+    """Keep product constraints, separating a known retailer category phrase."""
+    text=product_text(query)
+    if 'cereal' in tokens(text):
+        text=re.sub(r'\blinha\s+(?:e\s+)?fibra\b',' ',text)
+    return ' '.join(text.split())
 
 
 def discovery_query(query):
     """A format often exists only inside the page, never in its sitemap URL."""
     text=re.sub(r'\b(?:\d+\s*[x×]\s*)?\d+(?:[.,]\d+)?\s*(?:kg|gr|g|ml|cl|lt|l|un|uds)\b', ' ',query,flags=re.I)
-    if 'cereal' in tokens(text):
-        text=re.sub(r'\blinha\s+(?:e\s+)?fibra\b',' ',product_text(text))
+    text=product_query(text)
     return ' '.join(w for w in tokens(text) if not w.isdigit())
 
 
@@ -97,11 +104,15 @@ def find(offers, query):
         ranked=[(rank(query,o['name'],o.get('brand',''),o.get('pack',''),fuzzy=True,category=o.get('category','')),o) for o in offers]
         ranked=[(score,o) for score,o in ranked if score]
         corrected=bool(ranked)
-    if query and not ranked and 'cereal' in tokens(query) and re.search(r'\blinha\s+(?:e\s+)?fibra\b',product_text(query)):
-        related=re.sub(r'\blinha\s+(?:e\s+)?fibra\b',' ',product_text(query))
-        ranked=[(rank(related,o['name'],o.get('brand',''),o.get('pack','')),o) for o in offers]
-        ranked=[(score,o) for score,o in ranked if score]
-        corrected=bool(ranked)
+    related=product_query(query)
+    if query and related!=product_text(query):
+        # A fibre-labelled variant must not hide Original just because another
+        # retailer omitted the commercial category from its product metadata.
+        existing={o['id'] for _,o in ranked}
+        extra=[(rank(related,o['name'],o.get('brand',''),o.get('pack','')),o) for o in offers if o['id'] not in existing]
+        extra=[(score,o) for score,o in extra if score]
+        ranked.extend(extra)
+        corrected=corrected or bool(extra)
     ranked.sort(key=lambda row:(-row[0]-intent_bonus(query,row[1]['name'],row[1].get('category','')),
         row[1]['price_cents']/row[1]['size'] if row[1].get('size') else 1e12,row[1]['name']))
     return [o for _,o in ranked],corrected
