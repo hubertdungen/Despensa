@@ -97,6 +97,9 @@ def rank(query, name, brand='', pack='', fuzzy=False, category=''):
 
 
 def find(offers, query):
+    wanted=set(tokens(query))
+    if 'cereal' in wanted and not wanted & {'barra','barrita','bar'}:
+        offers=[o for o in offers if not set(tokens(o['name'])) & {'barra','barrita','bar'}]
     ranked=[(rank(query,o['name'],o.get('brand',''),o.get('pack',''),category=o.get('category','')),o) for o in offers]
     ranked=[(score,o) for score,o in ranked if score]
     corrected=False

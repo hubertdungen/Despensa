@@ -918,43 +918,46 @@ function manualModal() {
 }
 async function queueMutation(method, path, data) {
   const queue = readQueue();
-  queue.push({ method, path, data });
+  queue.push({ id: newId(), method, path, data });
   localStorage.setItem(uidKey() + "-queue", JSON.stringify(queue));
   await flushQueue();
 }
-let syncing = false;
-async function flushQueue() {
-  if (syncing || !state.user) return;
-  syncing = true;
-  try {
-    let queue = readQueue();
-    while (queue.length) {
-      const job = queue[0];
-      try {
-        await api(job.path, job.method, job.data);
-        queue.shift();
-        localStorage.setItem(uidKey() + "-queue", JSON.stringify(queue));
-        state.offline = false;
-      } catch (err) {
-        if (err.network) {
-          state.offline = true;
-          break;
-        }
-        if (err.status === 401) {
-          state.offline = true;
-          toast(t("loginHint"));
-          break;
-        }
-        toast(err.message);
-        queue.shift();
-        localStorage.setItem(uidKey() + "-queue", JSON.stringify(queue));
-      }
-    }
-  } finally {
-    syncing = false;
+let syncing = null;
+function flushQueue() {
+  if (syncing) return syncing;
+  if (!state.user) return Promise.resolve();
+  syncing = drainQueue().finally(() => {
+    syncing = null;
     saveSnapshot();
+  });
+  return syncing;
+}
+async function drainQueue() {
+  const owner = uidKey();
+  while (state.user && uidKey() === owner) {
+    const job = readQueue()[0];
+    if (!job) return;
+    try {
+      await api(job.path, job.method, job.data);
+      state.offline = false;
+    } catch (err) {
+      if (err.network || err.status === 401) {
+        state.offline = true;
+        if (err.status === 401) toast(t("loginHint"));
+        return;
+      }
+      toast(err.message);
+    }
+    if (uidKey() !== owner) return;
+    // A new mutation may have been appended while this request was in flight.
+    // Acknowledge this job against the current queue, never its old snapshot.
+    const current = readQueue();
+    const index = current.findIndex(entry => job.id ? entry.id === job.id : JSON.stringify(entry) === JSON.stringify(job));
+    if (index >= 0) current.splice(index, 1);
+    localStorage.setItem(owner + "-queue", JSON.stringify(current));
   }
 }
+
 async function loadOffers() {
   return fetchCatalog();
 }
@@ -1011,6 +1014,8 @@ async function loadPlan() {
   state.planLoading = roads;
   if ($("#plan-loading")) $("#plan-loading").hidden = !roads;
   try {
+    await flushQueue();
+    if (state.offline || seq !== planSequence) return;
     const result = await api(`/plan?month=${state.month}&day=${state.day}&route=${state.route}&roads=${roads}`);
     if (seq !== planSequence || roads !== (state.view === "plan")) return;
     state.plan = result;

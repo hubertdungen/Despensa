@@ -97,6 +97,7 @@ def match(item, offer):
         'leite': {'condensado', 'po', 'infantil', 'lactentes', 'crescimento', 'chocolate', 'creme'},
         'azeite': {'oleo', 'spray', 'aromatizado'},
         'massa': {'tomate', 'pimentao', 'folhada', 'quebrada', 'pizza'},
+        'cereais': {'barra','barras','barrita','barritas','bar'},
         **{fruit:{'iogurte','bebida','sumo','pure','papa','bolachas','bolacha','gelado','congelada','seca','desidratada','chips','sabor'}
            for fruit in ('banana','maca','pera','laranja','morango','uva')},
         **{meat:{'racao','alimento','cao','gato','caes','gatos','sabor','caldo','sopa','refeicao','lasanha','empada','panado','panados','cozinhado','caril','noodles'}

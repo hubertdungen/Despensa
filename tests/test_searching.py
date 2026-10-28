@@ -241,3 +241,16 @@ def test_cereal_search_and_plan_cover_one_package_instead_of_requiring_one_kg(tm
     assert selection['packs']==1 and selection['cost_cents']==row['price_cents']
     assert selection['quantity_basis']=='packages'
     assert c.get('/api/offers?q=Os+Cereais+Linha+e+Fibra+Fitness&investigate=false').json['total']==1
+
+
+def test_breakfast_cereal_search_does_not_replace_a_box_with_a_snack_bar():
+    original=offer('original','Cereais Fitness Original',brand='Fitness',pack='625 g',size=.625,unit='kg')
+    bar=offer('bar','Barra Cereais Fitness Chocolate',brand='Fitness',price=50,pack='23.5 g',size=.0235,unit='kg')
+    rows,_=find([bar,original],'Os Cereais Linha e Fibra Fitness')
+    assert [o['id'] for o in rows]==['original']
+    assert find([bar,original],'Barras Cereais Fitness')[0]==[bar]
+    from planner import make_plan
+    from app import default_profile
+    plan=make_plan([dict(id='cereal',name='Cereais',query='Cereais Linha e Fibra Fitness',quantity=1,unit='un',checked=False)],
+        [bar,original],default_profile(),datetime.now(timezone.utc).date().isoformat())['plans'][0]
+    assert plan['selections'][0]['offer']['id']=='original'

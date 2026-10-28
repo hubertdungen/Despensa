@@ -267,13 +267,15 @@ test('a later list response cannot overwrite a calculated road plan',async({page
   await page.locator('#username').fill('route-race-test');await page.locator('#password').fill('temporary-test-password-2026');
   await page.locator('#auth-form button[type=submit]').click();await expect(page.locator('#quick-add')).toBeVisible();
   const value=await page.evaluate(async()=>{
-    const original=api;let finish;
+    const original=api;let finish,started;
+    const begun=new Promise(resolve=>{started=resolve;});
     api=async path=>{
-      if(path.startsWith('/plan?')&&path.includes('roads=false')) return new Promise(resolve=>{finish=resolve;});
+      if(path.startsWith('/plan?')&&path.includes('roads=false')) return new Promise(resolve=>{finish=resolve;started();});
       return {plans:[],missing:[],marker:'road'};
     };
     try {
       state.view='list';const older=loadPlan();
+      await begun;
       state.view='plan';await loadPlan();
       finish({plans:[],missing:[],marker:'list'});await older;
       return state.plan.marker;
@@ -291,4 +293,30 @@ test('the app surfaces a newer server version without discarding a draft',async(
   await expect(page.locator('#app-update')).toContainText('atualização');
   await expect(page.locator('#app-update button')).toHaveText('Atualizar app');
   await expect(page.locator('#quick-add input')).toHaveValue('Cereais Fitness');
+});
+
+test('two products added while a save is pending both persist before planning',async({page,context})=>{
+  let release,seen;
+  const blocked=new Promise(resolve=>{release=resolve;}), firstRequest=new Promise(resolve=>{seen=resolve;});
+  let posts=0;
+  await page.route('**/api/items',async route=>{
+    if(route.request().method()==='POST'&&++posts===1) {seen();await blocked;}
+    await route.continue();
+  });
+  await page.goto('/');await page.locator('#auth-toggle').click();
+  await page.locator('#username').fill('concurrent-save-test');await page.locator('#password').fill('temporary-test-password-2026');
+  await page.locator('#auth-form button[type=submit]').click();await expect(page.locator('#quick-add')).toBeVisible();
+  for(const name of ['Leite','Produto sem catálogo']) {
+    await page.locator('#quick-add input').fill(name);await page.locator('#quick-add button').click();
+    await page.locator('#item-form button[type=submit]').click();
+    if(name==='Leite') await firstRequest;
+  }
+  await expect.poll(()=>page.evaluate(()=>readQueue().length)).toBe(2);
+  await page.locator('.mobile-nav [data-view=plan]').click();
+  release();
+  await expect.poll(async()=> (await(await context.request.get('/api/items')).json()).items.length).toBe(2);
+  await expect.poll(()=>page.evaluate(()=>readQueue().length)).toBe(0);
+  await expect(page.locator('.plan-card').first()).toContainText('1 / 2');
+  await expect(page.locator('.plan-card').first()).toContainText('Cabaz incompleto');
+  await page.unrouteAll({behavior:'wait'});
 });
