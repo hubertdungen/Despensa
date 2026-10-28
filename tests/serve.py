@@ -4,7 +4,7 @@ import tempfile
 import os
 import json
 import threading
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timezone, timedelta
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from waitress import serve
@@ -35,6 +35,11 @@ def fixture_matrix(profile,ids,day,mode='auto',branches=None):
     try:return _original_matrix(profile,ids,day,mode,branches=branches)
     finally:routing.table=original
 plan_service.road_matrix=fixture_matrix
+def fixture_transit(folder,route,when,stop_minutes):
+    end=when+timedelta(minutes=40)
+    segments=[dict(arrival=end.isoformat(),minutes=40,boardings=2,distance=None,realtime=False,legs=[dict(mode='BUS',line='7',start=when.isoformat(),end=end.isoformat(),realtime=False,duration=2400,distance=None)])]
+    return dict(route,verified=True,provider='Transitous',total_km=None,total_minutes=40,base_km=None,km=None,extra_minutes=None,transit_legs=segments,boardings=2)
+plan_service.enrich_transit=fixture_transit
 fixture_vehicle=dict(id='ademe:fixture',label='Renault Clio 1.5 dCi Teste',consumption=4.637,fuel='diesel',unit='L/100 km',source='ADEME fixture',source_updated_at=date.today().isoformat())
 travel.get_vehicle=lambda folder,identifier:dict(fixture_vehicle) if identifier=='ademe:fixture' else (_ for _ in ()).throw(ValueError('Fixture vehicle not found'))
 

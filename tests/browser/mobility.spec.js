@@ -86,3 +86,18 @@ test('the chosen store and price are used at checkout and ticking a purchase kee
   await expect(page.locator('.item.checked')).toHaveCount(1);
   await expect.poll(async()=> (await(await context.request.get('/api/plans/selected')).json()).selected.stale).toBe(false);
 });
+
+test('verified public transport shows schedules and declared fares without inventing kilometres',async({page,context})=>{
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await register(page,'mobility-transit');
+  await context.request.put('/api/profile',{data:{home:'Casa teste',home_coords:[-9.1,38.7],mobility:{mode:'transit',transit_ticket:1.8}}});
+  await page.reload();await addMilk(page);await page.locator('.mobile-nav [data-view=plan]').click();
+  const card=page.locator('.plan-card').first();
+  await expect(card.locator('.journey-facts')).toContainText('Horários consultados');
+  await expect(card.locator('.journey-facts')).toContainText('3,60');
+  await expect(card.locator('.journey-facts')).not.toContainText('km');
+  await expect(card).not.toContainText('Sem trânsito ao vivo');
+  await card.locator('.trip-assumptions summary').click();
+  await expect(card.locator('.transit-connections')).toContainText('BUS 7');
+  expect(errors).toEqual([]);
+});

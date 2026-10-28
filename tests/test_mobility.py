@@ -253,3 +253,26 @@ def test_checking_a_purchase_preserves_selected_itinerary_but_quantity_changes_i
     c.patch('/api/items/'+item['id'],json=dict(quantity=2))
     assert app.planning.selection_signature(uid,month,params)!=before
     app.planning.pool.shutdown()
+
+
+def test_transit_request_normalizes_offset_and_fractional_time_without_departing_in_past(monkeypatch,tmp_path):
+    from zoneinfo import ZoneInfo
+    when=datetime(2026,10,28,15,12,34,123456,tzinfo=ZoneInfo('Europe/Madrid'))
+    capture={}
+    class Response:
+        def raise_for_status(self):pass
+        def json(self):
+            return dict(itineraries=[dict(startTime='2026-10-28T14:13:00Z',endTime='2026-10-28T14:43:00Z',legs=[dict(mode='BUS',routeShortName='1',startTime='2026-10-28T14:13:00Z',endTime='2026-10-28T14:43:00Z',duration=1800,distance=5000)])])
+    def get(url,**kwargs):capture.update(kwargs);return Response()
+    monkeypatch.setattr(journey.requests,'get',get)
+    journey._cache.clear()
+    result=journey.transit_leg(tmp_path,[-3.1,40.1],[-3.2,40.2],when)
+    assert capture['params']['time']=='2026-10-28T14:13:00Z'
+    assert capture['params']['arriveBy']=='false' and result['boardings']==1
+    assert result['minutes']==30 and result['distance']==5000
+
+
+def test_fuel_quote_is_not_presented_as_used_when_manual_km_fallback_priced_the_trip():
+    p=default_profile();p['mobility']['fuel_quote']=dict(unit_price=1.8)
+    result=travel.estimate(p,dict(total_km=10,km=0,total_minutes=20),1)
+    assert result['travel_method']=='manual_km' and result['fuel_quote'] is None

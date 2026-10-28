@@ -78,7 +78,7 @@ def estimate(profile,route,stops):
     return dict(travel_cents=fuel+extras,fuel_cents=fuel,fuel_amount=round(amount,3) if amount is not None else None,
         extra_travel_cents=extra+extras if route.get('km') is not None else None,travel_method=method,parking_cents=round(stops*m['parking_per_stop']*100),
         tolls_cents=round(m['tolls']*100),time_cost_cents=time_cost,decision_cents=fuel+extras+time_cost,
-        shopping_minutes=stops*m['stop_minutes'],total_minutes=round(minutes),fuel_quote=quote,
+        shopping_minutes=stops*m['stop_minutes'],total_minutes=round(minutes),fuel_quote=quote if method!='manual_km' else None,
         consumption=rate,vehicle_label=m.get('vehicle_label',''),energy_unit='kWh' if m['fuel']=='electric' else 'L')
 
 

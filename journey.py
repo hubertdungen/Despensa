@@ -41,7 +41,7 @@ def traffic_summary(points,when):
     if hit and time.monotonic()-hit[0]<300:return hit[1]
     try:
         r=requests.get('https://api.tomtom.com/routing/1/calculateRoute/'+coords+'/json',
-            params=dict(key=key,traffic='true',departAt='now' if abs((when-datetime.now(timezone.utc)).total_seconds())<60 else when.isoformat(),routeType='fastest',travelMode='car',
+            params=dict(key=key,traffic='true',departAt='now' if abs((when-datetime.now(timezone.utc)).total_seconds())<60 else when.replace(microsecond=0).isoformat(),routeType='fastest',travelMode='car',
                 computeTravelTimeFor='all',routeRepresentation='summaryOnly'),headers={'User-Agent':AGENT},timeout=(4,12))
         r.raise_for_status();summary=r.json()['routes'][0]['summary']
         result=dict(meters=float(summary['lengthInMeters']),seconds=float(summary['travelTimeInSeconds']),
@@ -72,7 +72,11 @@ def enrich_traffic(route,when):
 
 
 def transit_leg(folder,start,end,when):
-    stamp=when.replace(second=0,microsecond=0).isoformat()
+    # MOTIS can misparse fractional/offset timestamps. Send whole UTC minutes
+    # in RFC3339 Z form, rounding up so a past departure cannot be selected.
+    requested=when.astimezone(timezone.utc)
+    if requested.second or requested.microsecond:requested+=timedelta(minutes=1)
+    stamp=requested.replace(second=0,microsecond=0).isoformat().replace('+00:00','Z')
     cache_key=('transit',tuple(start),tuple(end),stamp)
     with _lock:
         hit=_cache.get(cache_key)
@@ -88,7 +92,7 @@ def transit_leg(folder,start,end,when):
     base=os.environ.get('DESPENSA_TRANSIT_URL','https://api.transitous.org').rstrip('/')
     try:
         r=requests.get(base+'/api/v6/plan',params=dict(fromPlace=f'{start[1]},{start[0]}',toPlace=f'{end[1]},{end[0]}',
-            time=when.isoformat(),transitModes='TRANSIT',directModes='WALK',numItineraries=1,maxItineraries=1,
+            time=stamp,arriveBy='false',transitModes='TRANSIT',directModes='WALK',numItineraries=1,maxItineraries=1,
             timetableView='false',maxTransfers=3),headers={'User-Agent':AGENT},timeout=(4,15))
         r.raise_for_status();data=r.json()
         options=(data.get('itineraries') or [])+(data.get('direct') or [])
