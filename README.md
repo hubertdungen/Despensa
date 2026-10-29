@@ -7,7 +7,7 @@
 
 Despensa é uma aplicação de compras pessoais que pode alojar no seu computador ou NAS. Organiza listas mensais, guarda as suas preferências e compara os produtos para os quais existem preços observados. A interface funciona em português europeu e espanhol, no computador e no telemóvel.
 
-**Versão 0.6: planos guardados, custos de viagem e comparação até quatro lojas.** A aplicação descobre páginas, combina vários métodos de leitura, guarda o progresso e repete fontes que falham. O radar mostra a cobertura efetivamente conseguida em cada loja; uma fonte sem resposta nunca aparece como um preço encontrado.
+**Versão 0.7: a Despensa decide quando e onde compensa ir.** Com casa, trabalho e o horário de entrada e saída, compara os próximos 7 dias — antes de entrar, à saída, mais tarde a partir de casa ou nos dias livres — com o trânsito típico de cada hora e o horário das lojas, e mantém sozinha uma recomendação atualizada. O carro pode ser identificado pelo modelo e ano (dados europeus da EEA), com o ano estimado pela matrícula, e o consumo real passa a vir dos seus abastecimentos.
 
 ## O que já pode fazer
 
@@ -40,6 +40,17 @@ Despensa é uma aplicação de compras pessoais que pode alojar no seu computado
 ![Plano com custo da viagem e compras por loja](docs/screenshots/plan.png)
 
 *Planeamento numa conta de demonstração isolada: moradas, trajetos e custos ilustrativos.*
+
+## Quando compensa ir (0.7)
+
+- **Horário de trabalho**: em **Perfil → Rotina**, indique a entrada, a saída e o intervalo em que pode ir às compras nos dias livres.
+- **Melhor momento**: em **Plano de compras → Quando compensa ir?**, cada dia dos próximos 7 é comparado em vários momentos: casa→lojas→trabalho antes de entrar, trabalho→lojas→casa à saída, mais tarde a partir de casa, e de hora a hora nos dias livres. Conta só o que é *a mais*: o percurso casa↔trabalho já ia ser feito.
+- **Trânsito**: sem chave paga, os tempos OSRM são multiplicados por uma curva horária típica derivada do TomTom Traffic Index 2025 (Lisboa; o Porto difere poucos %). A sensibilidade (0–2) ajusta-se em **Custos e tempo nas lojas**. Com `DESPENSA_TOMTOM_KEY`, os 3 melhores momentos são confirmados com trânsito previsto do TomTom. O trânsito intenso também aumenta o combustível estimado.
+- **Horários das lojas**: lidos do OpenStreetMap (`opening_hours`). Uma loja fechada nunca é recomendada; sem horário publicado, usa-se o horário típico e o momento fica assinalado.
+- **Preços em dias futuros**: o preço normal de hoje é reutilizado e assinalado («preços de hoje; podem mudar»); promoções com validade expiram na data certa.
+- **Piloto automático**: o servidor recalcula a recomendação quando a lista ou o perfil mudam, ou a cada 6 horas, e mostra-a no topo da lista com **Usar este momento**.
+- **Carro**: com ano entre 2010 e 2025, a pesquisa usa os registos de carros novos da UE (EEA, CO₂ NEDC/WLTP convertido em L/100 km com o desvio real médio medido pelo ICCT). A matrícula estima o ano (Espanha ao mês; Portugal aproximado, ±1–2 anos). Não existe consulta gratuita e legítima de matrícula→modelo em Portugal ou Espanha, por isso o modelo é sempre escolhido por si.
+- **Abastecimentos**: registe litros, total pago e quilómetros. Com dois depósitos cheios, calcula o consumo real e o custo por km; escolha **Usar este consumo** e cada novo abastecimento atualiza as contas sozinho.
 
 ## Começar
 

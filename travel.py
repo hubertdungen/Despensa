@@ -8,21 +8,22 @@ from mobility_sources import fuel_prices,get_vehicle
 def defaults():
     return dict(mode='car',vehicle_id='',vehicle_label='',vehicle=None,consumption=None,consumption_source='manual',
         fuel='petrol95',fuel_country='PT',price_mode='auto',unit_price=None,parking_per_stop=0,tolls=0,
-        stop_minutes=15,time_value=0,transit_ticket=None,transit_pass=False)
+        stop_minutes=15,time_value=0,transit_ticket=None,transit_pass=False,traffic_scale=1.0)
 
 
 def validate(data,current=None,folder=None):
     result=defaults();result.update(current or {})
     if not isinstance(data,dict):raise ValueError('Definições de deslocação inválidas')
     for key,values in {'mode':('car','transit'),'fuel':('petrol95','petrol98','diesel','lpg','electric'),
-                       'fuel_country':('PT','ES'),'price_mode':('auto','manual'),'consumption_source':('manual','catalogue')}.items():
+                       'fuel_country':('PT','ES'),'price_mode':('auto','manual'),'consumption_source':('manual','catalogue','refuels')}.items():
         value=data.get(key,result[key])
         if value not in values:raise ValueError('Opção de deslocação inválida: '+key)
         result[key]=value
     for key,low,high in [('consumption',.1,100),('unit_price',.01,10),('parking_per_stop',0,100),('tolls',0,500),
-                         ('stop_minutes',0,180),('time_value',0,200),('transit_ticket',0,100)]:
+                         ('stop_minutes',0,180),('time_value',0,200),('transit_ticket',0,100),('traffic_scale',0,2)]:
         raw=data.get(key,result[key]);value=None if raw in (None,'') else float(raw)
         if value is not None and (not math.isfinite(value) or not low<=value<=high):raise ValueError('Valor inválido: '+key)
+        if value is None and key=='traffic_scale':value=1.0
         if value is None and key in ('parking_per_stop','tolls','stop_minutes','time_value'):raise ValueError('Valor necessário: '+key)
         result[key]=value
     previous=(current or {}).get('fuel',defaults()['fuel'])
@@ -39,8 +40,28 @@ def validate(data,current=None,folder=None):
         if not vehicle:vehicle=get_vehicle(folder,identifier)
         result.update(vehicle_id=identifier,vehicle=vehicle,vehicle_label=vehicle['label'])
         if result['consumption_source']=='catalogue':result.update(consumption=vehicle['consumption'],fuel=vehicle['fuel'])
-    else:result.update(vehicle_id='',vehicle=None,consumption_source='manual')
+    else:result.update(vehicle_id='',vehicle=None,consumption_source='refuels' if result['consumption_source']=='refuels' else 'manual')
     return result
+
+
+def measured(refuels):
+    """Real consumption from full-tank refuels with odometer readings (classic tank-to-tank method).
+
+    Litres of every fill after one full tank, up to and including the next full
+    tank, were burnt over the km between those two readings.
+    """
+    rows=sorted((r for r in refuels if r.get('odometer') is not None),key=lambda r:(r['odometer'],r['day']))
+    litres=0;km=0;intervals=0;start=None;pending=0
+    for r in rows:
+        if start is not None:pending+=r['litres']
+        if r.get('full'):
+            if start is not None and r['odometer']>start:
+                litres+=pending;km+=r['odometer']-start;intervals+=1
+            start=r['odometer'];pending=0
+    spent=sum(r['total_cents'] for r in refuels)
+    return dict(consumption=round(litres/km*100,2) if km>=50 else None,km=km,litres=round(litres,2),intervals=intervals,
+        cost_per_km_cents=round(sum(r['total_cents'] for r in rows[1:])/(rows[-1]['odometer']-rows[0]['odometer']),1) if len(rows)>1 and rows[-1]['odometer']>rows[0]['odometer'] else None,
+        spent_cents=spent,count=len(refuels))
 
 
 def resolve(profile,folder):

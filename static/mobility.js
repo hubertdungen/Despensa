@@ -53,12 +53,12 @@ const mobilityCopy = {
     showSelected:'Ver plan elegido',clearPlan:'Dejar de usar este plan',recalculate:'Recalcular',lookupBusy:'Consultando catálogo…',lookupError:'No se pudo consultar el catálogo ahora.',perBoarding:'por embarque',boardings:'embarques',walking:'A pie',min:'min',selectedAt:'Elegido a las',checking:'Confirmando…'
   }
 };
-const mt=key=>mobilityCopy[locale]?.[key]||mobilityCopy['pt-PT'][key]||ft(key);
+const mt=key=>mobilityCopy[locale]?.[key]||mobilityCopy['pt-PT'][key]||autoCopy[locale]?.[key]||autoCopy['pt-PT'][key]||ft(key);
 function mobilitySettings() {
   const m=state.profile.mobility||{},choices=(name,values,value)=>`<div class="field" ${name!=="m-mode"?"data-car-field":""}><label for="${name}">${mt(name.replace('m-',''))}</label><select id="${name}" name="${name}">${values.map(([key,label])=>`<option value="${key}" ${value===key?'selected':''}>${esc(label)}</option>`).join('')}</select></div>`;
   return `<section class="panel wide mobility-settings"><div class="panel-body"><h2>${mt('vehicleSettings')}</h2><div class="form-grid">${choices('m-mode',[['car',mt('car')],['transit',mt('transit')]],m.mode||'car')}
   <div class="field" data-car-field><label for="vehicle-query">${mt('vehicleQuery')}</label><div class="toolbar"><input id="vehicle-query" autocomplete="off" placeholder="Renault Clio"><button type="button" id="vehicle-search">${mt('vehicleSearch')}</button></div></div>
-  <div class="field" data-car-field><label for="vehicle-year">${mt('vehicleYear')}</label><input id="vehicle-year" type="number" min="1984" max="${new Date().getFullYear()+1}"><small>${mt('vehicleYearHint')}</small></div>
+  <div class="field" data-car-field><label for="vehicle-year">${mt('vehicleYear')}</label><input id="vehicle-year" type="number" min="1984" max="${new Date().getFullYear()+1}"><small>${mt('vehicleYearHint')}</small></div>${plateField()}
   <div class="field full" data-car-field id="vehicle-results" aria-live="polite"></div>
   <input type="hidden" id="m-vehicle_id" value="${esc(m.vehicle_id||'')}"><input type="hidden" id="m-consumption_source" value="${esc(m.consumption_source||'manual')}">
   <div class="field" data-car-field><label for="m-vehicle_label">${mt('vehicleLabel')}</label><input id="m-vehicle_label" value="${esc(m.vehicle_label||'')}"></div>
@@ -67,7 +67,7 @@ function mobilitySettings() {
   ${choices('m-priceMode',[['auto',mt('automaticPrice')],['manual',mt('manualPrice')]],m.price_mode||'auto')}
   ${choices('m-fuelCountry',[['PT','Portugal'],['ES','España']],m.fuel_country||'PT')}
   <div class="field" data-car-field><label for="m-unit_price">${mt('unitPrice')}</label><input id="m-unit_price" type="number" min="0.01" max="10" step="0.001" value="${m.unit_price??''}"><button type="button" class="quiet small" id="fuel-current">${mt('fuelCurrent')}</button><small id="fuel-preview" aria-live="polite"></small></div>
-  <details class="field full"><summary>${mt('advancedTrip')}</summary><div class="form-grid">${[['parking_per_stop','parking',0,100],['tolls','tolls',0,500],['stop_minutes','stopMinutes',15,180],['time_value','timeValue',0,200]].map(([key,label,fallback,max])=>`<div class="field" ${['parking_per_stop','tolls'].includes(key)?'data-car-field':''}><label for="m-${key}">${mt(label)}</label><input id="m-${key}" type="number" min="0" max="${max}" step="${key==='stop_minutes'?'1':'.01'}" value="${m[key]??fallback}"></div>`).join('')}
+  <details class="field full"><summary>${mt('advancedTrip')}</summary><div class="form-grid">${[['parking_per_stop','parking',0,100],['tolls','tolls',0,500],['stop_minutes','stopMinutes',15,180],['time_value','timeValue',0,200],['traffic_scale','trafficScale',1,2]].map(([key,label,fallback,max])=>`<div class="field" ${['parking_per_stop','tolls'].includes(key)?'data-car-field':''}><label for="m-${key}">${mt(label)}</label><input id="m-${key}" type="number" min="0" max="${max}" step="${key==='stop_minutes'?'1':'.01'}" value="${m[key]??fallback}"></div>`).join('')}
   <div class="field full"><small>${mt('timeValueHint')}</small></div></div></details>
   <div class="field" data-transit-field><label for="m-transit_ticket">${mt('transitTicket')}</label><input id="m-transit_ticket" type="number" min="0" max="100" step="0.01" value="${m.transit_ticket??''}"></div>
   <label class="checkbox-field" data-transit-field><input id="m-transit_pass" type="checkbox" ${m.transit_pass?'checked':''}>${mt('transitPass')}</label><p class="field full muted" data-transit-field>${mt('transitHint')}</p>
@@ -78,7 +78,7 @@ function mobilityFormData() {
   for(const key of ['mode','fuel','vehicle_id','vehicle_label','consumption_source','consumption','unit_price','parking_per_stop','tolls','stop_minutes','time_value','transit_ticket']) {
     const field=$('#m-'+key);if(field)m[key]=field.value;
   }
-  m.price_mode=$('#m-priceMode').value;m.fuel_country=$('#m-fuelCountry').value;m.transit_pass=$('#m-transit_pass').checked;
+  m.traffic_scale=$('#m-traffic_scale')?.value??m.traffic_scale;m.price_mode=$('#m-priceMode').value;m.fuel_country=$('#m-fuelCountry').value;m.transit_pass=$('#m-transit_pass').checked;
   return m;
 }
 function bindMobilitySettings() {
@@ -165,7 +165,7 @@ function renderJourneyPlan() {
   const shown=state.showAllPlans?result?.plans:result?.plans?.filter(p=>shortlist.has(p.id));
   const phases=['queued','products','fuel','locations','roads','optimizing','traffic','transit','ready'];
   const progress=Math.min(95,10+Math.max(0,phases.indexOf(run?.phase||'queued'))*12);
-  return `${title('planTitle','planSubtitle')}<section class="journey-heading"><h2>${mt('journeyTitle')}</h2><p>${mt('journeySubtitle')}</p><div class="toolbar">
+  return `${title('planTitle','planSubtitle')}${renderWindows()}<section class="journey-heading"><h2>${mt('journeyTitle')}</h2><p>${mt('journeySubtitle')}</p><div class="toolbar">
     <label>${t('date')}<input type="date" id="plan-day" value="${state.day}"></label><label>${t('routeMode')}<select id="route-mode"><option value="auto" ${state.route==='auto'?'selected':''}>${t('routeMode')}</option><option value="home" ${state.route==='home'?'selected':''}>${t('homeRoute')}</option><option value="work" ${state.route==='work'?'selected':''}>${t('workRoute')}</option></select></label>
     <label>${mt('departureTime')}<input type="time" id="plan-departure" value="${esc(state.departureTime||'')}"></label>
     <label>${mt('maximumStops')}<select id="plan-max-stops">${[1,2,3,4].map(n=>`<option value="${n}" ${n===(state.planMaxStops||4)?'selected':''}>${n} ${mt(n===1?'shop':'shops')}</option>`).join('')}</select></label>

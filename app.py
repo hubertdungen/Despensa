@@ -26,7 +26,7 @@ from planner import make_plan
 
 from travel import defaults as travel_defaults
 
-APP_VERSION = '0.6.0'
+APP_VERSION = '0.7.0'
 ROOT = Path(__file__).resolve().parent
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, password TEXT NOT NULL, created TEXT NOT NULL);
@@ -41,6 +41,8 @@ CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,status TEXT NOT NULL,created
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY,value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS purchases(id TEXT PRIMARY KEY,user_id TEXT NOT NULL,month TEXT NOT NULL,item_id TEXT NOT NULL,data TEXT NOT NULL,UNIQUE(user_id,item_id));
 CREATE TABLE IF NOT EXISTS trips(id TEXT PRIMARY KEY,user_id TEXT NOT NULL,month TEXT NOT NULL,data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS refuels(id TEXT PRIMARY KEY,user_id TEXT NOT NULL,month TEXT NOT NULL,data TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS refuel_owner ON refuels(user_id,month);
 '''
 
 
@@ -51,7 +53,7 @@ def utcnow():
 def default_profile():
     return dict(locale='pt-PT', countries=['PT'], budget=250, budget_source='auto', reference_store='', interval_hours=24, automatic=True,
         mobility=travel_defaults(),max_stops=4, cost_per_km=.20, home='', work='', home_coords=None, work_coords=None,
-        workdays=[0, 1, 2, 3, 4], stores={s: dict(enabled=not STORE_MAP[s]['professional'], card=False,
+        workdays=[0, 1, 2, 3, 4], work_start='', work_end='', shop_from='09:00', shop_until='21:00', autopilot=True, stores={s: dict(enabled=not STORE_MAP[s]['professional'], card=False,
         subscription=False, delivery_subscription=False, access=False, coupons=[], extra_km=None, address='', coords=None) for s in STORE_MAP})
 
 
@@ -92,7 +94,7 @@ def create_app(data_dir=None, testing=False):
 
     @contextmanager
     def database():
-        db = sqlite3.connect(app.config['DATABASE'], timeout=15)
+        db = sqlite3.connect(app.config['DATABASE'], timeout=45)
         db.row_factory = sqlite3.Row
         try:
             yield db
@@ -126,16 +128,20 @@ def create_app(data_dir=None, testing=False):
                 if (not hmac.compare_digest(supplied.encode(), proxy_secret.encode())
                         or not subject or len(subject) > 200 or any(ord(c) < 32 for c in subject)):
                     return jsonify(error='Autenticação Authelia necessária', code='proxy_auth_required', auth=auth_info), 401
+                lookup = 'SELECT users.id,users.username FROM identities JOIN users ON users.id=identities.user_id WHERE provider=? AND subject=?'
                 with database() as db:
-                    # Serialize first-use provisioning; never merge accounts merely by username.
-                    db.execute('BEGIN IMMEDIATE')
-                    row = db.execute('SELECT users.id,users.username FROM identities JOIN users ON users.id=identities.user_id WHERE provider=? AND subject=?', ('authelia', subject)).fetchone()
-                    if not row:
-                        uid = uuid.uuid4().hex
-                        db.execute('INSERT INTO users VALUES(?,?,?,?)', (uid, 'authelia:' + subject, '', utcnow()))
-                        db.execute('INSERT INTO profiles VALUES(?,?)', (uid, json.dumps(default_profile())))
-                        db.execute('INSERT INTO identities VALUES(?,?,?)', ('authelia', subject, uid))
-                        row = dict(id=uid)
+                    row = db.execute(lookup, ('authelia', subject)).fetchone()
+                if not row:
+                    with database() as db:
+                        # Serialize first-use provisioning only; never merge accounts merely by username.
+                        db.execute('BEGIN IMMEDIATE')
+                        row = db.execute(lookup, ('authelia', subject)).fetchone()
+                        if not row:
+                            uid = uuid.uuid4().hex
+                            db.execute('INSERT INTO users VALUES(?,?,?,?)', (uid, 'authelia:' + subject, '', utcnow()))
+                            db.execute('INSERT INTO profiles VALUES(?,?)', (uid, json.dumps(default_profile())))
+                            db.execute('INSERT INTO identities VALUES(?,?,?)', ('authelia', subject, uid))
+                            row = dict(id=uid)
                 g.user = dict(id=row['id'], username=subject)
                 return fn(*args, **kwargs)
             raw = request.cookies.get('despensa_session', '')
@@ -286,6 +292,16 @@ def create_app(data_dir=None, testing=False):
         if 'mobility' in d:
             from travel import validate
             p['mobility']=validate(d['mobility'],p.get('mobility'),folder)
+        for key in ('work_start', 'work_end', 'shop_from', 'shop_until'):
+            value = str(d.get(key, p.get(key, '')))
+            if value and not re.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d', value):
+                raise ValueError('Hora inválida: ' + key)
+            p[key] = value
+        if bool(p['work_start']) != bool(p['work_end']) or (p['work_start'] and p['work_start'] >= p['work_end']):
+            raise ValueError('Indique a hora de entrada e a de saída do trabalho')
+        if not p['shop_from'] or not p['shop_until'] or p['shop_from'] >= p['shop_until']:
+            raise ValueError('Indique o intervalo em que pode ir às compras')
+        p['autopilot'] = bool(d.get('autopilot', p.get('autopilot', True)))
         p['automatic'] = bool(d.get('automatic', p['automatic']))
         p['budget_source'] = 'manual' if d.get('budget_source', p.get('budget_source')) == 'manual' else 'auto'
         ref=str(d.get('reference_store', p.get('reference_store','')))
@@ -427,6 +443,11 @@ def create_app(data_dir=None, testing=False):
                 count += 1
         return jsonify(copied=count)
 
+    def get_offer(uid, oid):
+        with database() as db:
+            row = db.execute("SELECT data FROM offers WHERE id=? AND (user_id='' OR user_id=?)", (oid, uid)).fetchone()
+        return json.loads(row['data']) if row else None
+
     def get_offers(uid):
         with database() as db:
             return [json.loads(r['data']) for r in db.execute("SELECT data FROM offers WHERE user_id='' OR user_id=?", (uid,))]
@@ -497,7 +518,7 @@ def create_app(data_dir=None, testing=False):
     def product_image():
         from images import thumbnail
         oid=request.args.get('id','')
-        offer=next((o for o in get_offers(g.user['id']) if o['id']==oid),None)
+        offer=get_offer(g.user['id'],oid)
         if not offer:
             return '',404
         try:
@@ -512,7 +533,7 @@ def create_app(data_dir=None, testing=False):
     @require_user
     def history():
         oid = request.args.get('id', '')
-        if not any(o['id'] == oid for o in get_offers(g.user['id'])):
+        if not get_offer(g.user['id'], oid):
             return jsonify(error='Produto não encontrado'), 404
         with database() as db:
             rows = [dict(r) for r in db.execute('SELECT observed,price FROM history WHERE offer_id=? ORDER BY observed DESC LIMIT 60', (oid,))]
@@ -639,7 +660,12 @@ def create_app(data_dir=None, testing=False):
         except (ValueError,ZoneInfoNotFoundError):raise ValueError('Fuso horário inválido') from None
         maximum=int(data.get('max_stops',4))
         if not 1<=maximum<=4:raise ValueError('Escolha entre uma e quatro lojas')
-        identifier=planning.start(g.user['id'],month,dict(day=day,route=mode,departure_time=clock,max_stops=maximum,timezone=zone))
+        params=dict(day=day,route=mode,departure_time=clock,max_stops=maximum,timezone=zone)
+        if data.get('kind')=='windows':
+            horizon=int(data.get('horizon',7))
+            if not 1<=horizon<=14:raise ValueError('Escolha entre 1 e 14 dias')
+            params=dict(kind='windows',day=day,route='auto',departure_time='',max_stops=maximum,timezone=zone,horizon=horizon)
+        identifier=planning.start(g.user['id'],month,params)
         return jsonify(run=planning.get(g.user['id'],identifier)),202
 
     @app.get('/api/plans/<identifier>')
@@ -654,6 +680,17 @@ def create_app(data_dir=None, testing=False):
     def select_plan():
         data=request.get_json()
         return jsonify(selected=planning.select(g.user['id'],str(data.get('run_id','')),str(data.get('plan_id',''))))
+
+    @app.get('/api/autopilot')
+    @require_user
+    def autopilot():
+        """Latest automatic best-window recommendation; refreshes itself when stale."""
+        month=month_arg();p=profile(g.user['id'])
+        if p.get('autopilot',True) and p.get('home_coords') and month==date.today().strftime('%Y-%m'):
+            try:planning.autopilot(g.user['id'],month,date.today().isoformat())
+            except ValueError:pass
+        ready,running=planning.latest(g.user['id'],month)
+        return jsonify(run=ready,running=running,enabled=bool(p.get('autopilot',True)))
 
     @app.get('/api/plans/selected')
     @require_user
@@ -813,6 +850,81 @@ def create_app(data_dir=None, testing=False):
         jid = enqueue_refresh(app)
         return jsonify(job_id=jid, queued=True), 202
 
+    def money_cents(value, high, label):
+        from decimal import Decimal, ROUND_HALF_UP
+        amount = Decimal(str(value).replace(',', '.'))
+        if not amount.is_finite() or not 0 <= amount <= high:
+            raise ValueError(label)
+        return int((amount * 100).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+
+    def user_refuels(uid):
+        with database() as db:
+            return [json.loads(r['data']) for r in db.execute('SELECT data FROM refuels WHERE user_id=? ORDER BY rowid DESC LIMIT 400', (uid,))]
+
+    def sync_measured(uid):
+        """With 'measured' chosen, every refuel keeps the planner's consumption current."""
+        from travel import measured
+        p = profile(uid)
+        value = measured(user_refuels(uid))['consumption']
+        if p['mobility'].get('consumption_source') == 'refuels' and value and 0.1 <= value <= 100:
+            p['mobility']['consumption'] = value
+            with database() as db:
+                db.execute('UPDATE profiles SET data=? WHERE user_id=?', (json.dumps(p), uid))
+
+    @app.get('/api/refuels')
+    @require_user
+    def refuels():
+        from travel import measured
+        month = month_arg()
+        rows = user_refuels(g.user['id'])
+        this_month = [r for r in rows if r['day'][:7] == month]
+        with database() as db:
+            trips = [json.loads(r['data']) for r in db.execute('SELECT data FROM trips WHERE user_id=? AND month=?', (g.user['id'], month))]
+        return jsonify(refuels=rows[:100], measured=measured(rows), month=dict(month=month, fuel_cents=sum(r['total_cents'] for r in this_month),
+            litres=round(sum(r['litres'] for r in this_month), 2), count=len(this_month), shopping_trips_cents=sum(t['cost_cents'] for t in trips)))
+
+    @app.post('/api/refuels')
+    @require_user
+    def add_refuel():
+        d = request.get_json()
+        rid = str(d.get('id', ''))
+        if not re.fullmatch('[a-f0-9]{32}', rid):
+            raise ValueError('Identificador inválido')
+        day = str(d.get('day', date.today().isoformat()))
+        if date.fromisoformat(day) > date.today():
+            raise ValueError('O abastecimento não pode ter uma data futura')
+        litres = float(str(d.get('litres', '')).replace(',', '.'))
+        if not 0.5 <= litres <= 300:
+            raise ValueError('Indique os litros (ou kWh) abastecidos')
+        total = money_cents(d.get('total', ''), 2000, 'Valor pago inválido')
+        odometer = d.get('odometer')
+        odometer = None if odometer in (None, '') else int(float(odometer))
+        if odometer is not None and not 0 <= odometer <= 2_000_000:
+            raise ValueError('Quilometragem inválida')
+        row = dict(id=rid, day=day, litres=round(litres, 3), total_cents=total, unit_price=round(total / 100 / litres, 3),
+            odometer=odometer, full=bool(d.get('full', True)), note=str(d.get('note', ''))[:120])
+        with database() as db:
+            earlier = [json.loads(r['data']) for r in db.execute('SELECT data FROM refuels WHERE user_id=?', (g.user['id'],))]
+            if odometer is not None and any(r.get('odometer') and r['day'] < day and r['odometer'] > odometer for r in earlier):
+                raise ValueError('A quilometragem é inferior à de um abastecimento anterior')
+            db.execute('INSERT OR IGNORE INTO refuels VALUES(?,?,?,?)', (rid, g.user['id'], day[:7], json.dumps(row)))
+        sync_measured(g.user['id'])
+        return jsonify(refuel=row), 201
+
+    @app.delete('/api/refuels/<rid>')
+    @require_user
+    def delete_refuel(rid):
+        with database() as db:
+            db.execute('DELETE FROM refuels WHERE id=? AND user_id=?', (rid, g.user['id']))
+        sync_measured(g.user['id'])
+        return jsonify(ok=True)
+
+    @app.get('/api/plate')
+    @require_user
+    def plate():
+        from mobility_sources import plate_year
+        return jsonify(plate=plate_year(request.args.get('q', '')[:20]))
+
     @app.get('/api/export')
     @require_user
     def export_data():
@@ -821,9 +933,10 @@ def create_app(data_dir=None, testing=False):
             purchases=[json.loads(r['data']) for r in db.execute('SELECT data FROM purchases WHERE user_id=?',(g.user['id'],))]
             trips=[json.loads(r['data']) for r in db.execute('SELECT data FROM trips WHERE user_id=?',(g.user['id'],))]
             selected=[json.loads(r['data']) for r in db.execute('SELECT data FROM selected_plans WHERE user_id=?',(g.user['id'],))]
+            refuel_rows=[json.loads(r['data']) for r in db.execute('SELECT data FROM refuels WHERE user_id=?',(g.user['id'],))]
         response = jsonify(version=1, exported_at=utcnow(), selected_plans=selected, profile=profile(g.user['id']),
             items=[dict(json.loads(r['data']), month=r['month']) for r in rows],
-            offers=[o for o in get_offers(g.user['id']) if o['source_kind'] == 'manual'],purchases=purchases,trips=trips)
+            offers=[o for o in get_offers(g.user['id']) if o['source_kind'] == 'manual'],purchases=purchases,trips=trips,refuels=refuel_rows)
         response.headers['Content-Disposition'] = 'attachment; filename="despensa.json"'
         return response
 
@@ -862,6 +975,21 @@ def run_job(app, job):
         db.execute('UPDATE jobs SET status=?,finished=? WHERE id=?', ('done' if ok == len(reports) else 'partial' if ok else 'failed', utcnow(), job['id']))
         db.execute('INSERT OR REPLACE INTO meta VALUES(?,?)', ('last_refresh', json.dumps(utcnow())))
 
+def autopilot_all(app):
+    """Recompute each user's best shopping window when it is stale, without being asked."""
+    month, today = date.today().strftime('%Y-%m'), date.today().isoformat()
+    with app.database() as db:
+        rows = db.execute('SELECT user_id,data FROM profiles').fetchall()
+        busy = {r[0] for r in db.execute('SELECT DISTINCT user_id FROM items WHERE month=?', (month,))}
+    for row in rows:
+        p = json.loads(row['data'])
+        if row['user_id'] in busy and p.get('autopilot', True) and p.get('home_coords'):
+            try:
+                app.planning.autopilot(row['user_id'], month, today)
+            except ValueError:
+                pass
+
+
 def worker(app, stop=None):
     stop = stop or threading.Event()
     while not stop.is_set():
@@ -872,6 +1000,9 @@ def worker(app, stop=None):
                 last = db.execute('SELECT created FROM jobs ORDER BY created DESC LIMIT 1').fetchone()
                 requested = db.execute('SELECT MAX(requested) FROM research_queries').fetchone()[0] or 0
                 sources = [json.loads(r[0]) for r in db.execute('SELECT data FROM research_sources')]
+            if time.time() - getattr(app, 'autopilot_at', 0) >= 300 and getattr(app, 'planning', None):
+                app.autopilot_at = time.time()
+                autopilot_all(app)
             if job:
                 run_job(app, job)
             else:
