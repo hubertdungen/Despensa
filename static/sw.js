@@ -1,10 +1,11 @@
-const CACHE = "despensa-shell-v6";
+const CACHE = "despensa-shell-v7";
 const SHELL = [
   "/",
   "/static/style.css",
   "/static/app.js",
   "/static/features.js",
   "/static/mobility.js",
+  "/static/autopilot.js",
   "/logo.svg",
   "/icon-192.png",
   "/icon-512.png",

@@ -104,3 +104,20 @@ test('verified public transport shows schedules and declared fares without inven
   await expect(card.locator('.transit-connections')).toContainText('BUS 7');
   expect(errors).toEqual([]);
 });
+
+test('work hours drive a best-moment search whose window becomes the chosen trip',async({page,context})=>{
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await register(page,'mobility-windows');
+  await context.request.put('/api/profile',{data:{home:'Casa teste',home_coords:[-9.1,38.7],work:'Trabalho teste',work_coords:[-9.2,38.8],
+    work_start:'09:00',work_end:'18:00',workdays:[0,1,2,3,4,5,6],mobility:{consumption:6,price_mode:'manual',unit_price:1.8}}});
+  await page.reload();await addMilk(page);
+  await page.locator('.mobile-nav [data-view=plan]').click();
+  await page.locator('[data-action-windows]').click();
+  const best=page.locator('.window-card.best');
+  await expect(best).toBeVisible({timeout:20000});
+  await expect(best.locator('.trip-stops li')).not.toHaveCount(0);
+  await best.locator('[data-select-window]').click();
+  await expect(page.locator('.selected-journey')).toContainText('Plano escolhido');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
+  expect(errors).toEqual([]);
+});

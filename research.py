@@ -189,13 +189,22 @@ def read_redirect(url, limit):
         return bytes(content)
 
 
+class AccessBlocked(ValueError):
+    """The source answers with a bot/captcha wall instead of its content."""
+
+
+def access_blocked(error):
+    return isinstance(error, AccessBlocked) or (isinstance(error, requests.HTTPError) and error.response is not None
+        and error.response.status_code in (401, 403, 429))
+
+
 def robots(root):
     hit = _rules.get(root)
     if hit and time.time() - hit[0] < 21600:
         return hit[1]
     content = read(root + '/robots.txt', 1_000_000).decode('utf-8-sig', 'replace')
     if '<html' in content.casefold() or '<!doctype' in content.casefold():
-        raise ValueError('A fonte exige verificação de acesso')
+        raise AccessBlocked('A fonte exige verificação de acesso')
     parser = SourceRules()
     parser.parse(content.splitlines())
     _rules[root] = (time.time(), parser)
@@ -548,6 +557,9 @@ def run_research(app, report, queries=None, per_store=12, stores=None):
                     if public_url(url,root):
                         kind='sitemap' if '.xml' in url or '/sitemap' in url else 'category'
                         db.execute('INSERT OR IGNORE INTO research_urls(store,url,kind) VALUES(?,?,?)',(store,url,kind))
+                # Release the write lock before the (large) frontier scan below:
+                # holding it here stalled the priority workers into "database is locked".
+                db.commit()
                 pending=[dict(r) for r in db.execute('SELECT * FROM research_urls WHERE store=? AND next_check<=? LIMIT 200000',(store,now)) if public_url(r['url'],root)]
             if not pending:
                 with app.database() as db:
@@ -600,24 +612,35 @@ def run_research(app, report, queries=None, per_store=12, stores=None):
                         interval=86400 if entry['kind']=='sitemap' else 21600
                         db.execute('UPDATE research_urls SET checked=?,next_check=?,failures=0 WHERE store=? AND url=?',(time.time(),time.time()+interval,store,url))
                     state['count']+=len(offers)
-                    pending.sort(key=prioritise)
+                    if new_urls:
+                        pending.sort(key=prioritise)
                 except Exception as error:
                     failures=entry.get('failures',0)+1
+                    # A delisted product (404/410) is gone: park it for a month instead of retrying daily.
+                    gone=isinstance(error,requests.HTTPError) and error.response is not None and error.response.status_code in (404,410)
                     with app.database() as db:
-                        db.execute('UPDATE research_urls SET checked=?,next_check=?,failures=? WHERE store=? AND url=?',(time.time(),time.time()+retry_delay(failures),failures,store,url))
-                    blocked=isinstance(error,requests.HTTPError) and error.response.status_code in (401,403,429)
+                        db.execute('UPDATE research_urls SET checked=?,next_check=?,failures=? WHERE store=? AND url=?',(time.time(),time.time()+(30*86400 if gone else retry_delay(failures)),failures,store,url))
+                    if gone:
+                        report(dict(state));continue
+                    blocked=access_blocked(error)
                     state['errors'].append('access_restricted' if blocked else 'robots_restricted' if str(error)=='robots_restricted' else 'source_unavailable')
                     if blocked:
                         break  # No retry storm or identity rotation against access blocks.
                 report(dict(state))
-            state['status']='ok' if state['count'] else 'discovering' if pages_read else 'unavailable'
+            if not state['count'] and pages_read:
+                # This pass found nothing new, but earlier passes may have: judge the catalogue, not the pass.
+                with app.database() as db:
+                    stored=db.execute("SELECT COUNT(*) FROM offers WHERE store=? AND user_id=''",(store,)).fetchone()[0]
+            else:
+                stored=0
+            state['status']='ok' if state['count'] or stored else 'discovering' if pages_read else 'unavailable'
             if store=='makro-pt' and not state['count'] and 'public_catalogue_metadata' in state['methods']:
                 state.update(status='unavailable',errors=['authentication_required'])
             if state['errors'] and state['count']:
                 state['status']='partial'
         except Exception as error:
             state['status']='unavailable'
-            state['errors'].append('access_restricted' if isinstance(error,requests.HTTPError) and error.response.status_code in (401,403,429) else 'source_unavailable')
+            state['errors'].append('access_restricted' if access_blocked(error) else 'source_unavailable')
         if state['status']=='unavailable':
             state['failures']+=1
             state['retry_at']=time.time()+retry_delay(state['failures'])
@@ -724,7 +747,7 @@ def search_store(app, task, page_limit=6):
                     db.execute('UPDATE research_urls SET checked=?,next_check=?,failures=0 WHERE store=? AND url=?',(time.time(),time.time()+21600,store,url))
                 found+=len(offers)
             except Exception as error:
-                blocked=isinstance(error,requests.HTTPError) and error.response.status_code in (401,403,429)
+                blocked=access_blocked(error)
                 errors.append('access_restricted' if blocked else 'source_unavailable')
                 with app.database() as db:
                     failures=entry['failures']+1
@@ -754,7 +777,7 @@ def search_store(app, task, page_limit=6):
         return dict(status='partial' if found and errors else 'done' if found or not errors else 'unavailable',
                     found=found,error=errors[0] if errors else '',next_check=time.time()+900 if errors else 0)
     except Exception as error:
-        blocked=isinstance(error,requests.HTTPError) and error.response.status_code in (401,403,429)
+        blocked=access_blocked(error)
         kind='access_restricted' if blocked else 'source_unavailable'
         if blocked:
             with app.database() as db:

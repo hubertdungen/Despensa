@@ -9,7 +9,7 @@ import requests
 _cache = {}
 _lock = threading.Lock()
 _last_geocode = 0.0
-HEADERS = {'User-Agent': 'Despensa/0.3 (+https://github.com/hubertdungen/Despensa; self-hosted grocery planner)'}
+HEADERS = {'User-Agent': 'Despensa/0.7 (+https://github.com/hubertdungen/Despensa; self-hosted grocery planner)'}
 
 
 def geocode(query):
@@ -65,14 +65,16 @@ def road_matrix(profile, store_ids, day, mode='auto', branches=None):
     if not home:
         return None
     is_workday = date.fromisoformat(day).weekday() in profile.get('workdays', [])
-    work_route = mode == 'work' or (mode == 'auto' and is_workday and bool(work))
+    work_route = mode in ('work', 'morning') or (mode == 'auto' and is_workday and bool(work))
     if work_route and not work:
         return None
     selected = store_ids[:8]
     if not selected:
         return None
-    origin = work if work_route else home
-    points, ids, places = [origin, home], {}, {}
+    # Node 0 is where the trip starts and node 1 where it ends: work→home after
+    # work, home→work before work, home→home otherwise.
+    points = [home, work] if mode == 'morning' else [work if work_route else home, home]
+    ids, places = {}, {}
     for sid in selected:
         explicit = profile['stores'].get(sid, {})
         options = [dict(store=sid,coords=explicit['coords'],name=explicit.get('branch_name') or sid,address=explicit.get('address',''),id=explicit.get('branch_id') or 'saved:'+sid,source='saved')] if explicit.get('coords') else [s for s in (branches or []) if s['store']==sid]
@@ -85,7 +87,8 @@ def road_matrix(profile, store_ids, day, mode='auto', branches=None):
     if len(points)==2:
         return None
     data=table(points)
-    return dict(ids=ids,places=places,distances=data['distances'],durations=data['durations'],base='work' if work_route else 'home',points=points)
+    return dict(ids=ids,places=places,distances=data['distances'],durations=data['durations'],
+        base='morning' if mode == 'morning' else 'work' if work_route else 'home',points=points)
 
 
 def distance_for(stores, matrix):
@@ -110,7 +113,7 @@ def distance_for(stores, matrix):
                 best = dict(meters=meters,km=round(meters/1000,2),extra_minutes=round(minutes),_seconds=total_seconds,_total_meters=total_meters,
                     total_km=round(total_meters/1000,2),base_km=round(distances[0][1]/1000,2),total_minutes=round(total_seconds/60),order=list(order),
                     stops=[matrix.get('places',{}).get(i,{'store':s}) for i,s in zip(chosen,order)],base=matrix['base'],
-                    coordinates=[matrix['points'][i] for i in nodes] if matrix.get('points') else [],provider='OSRM',traffic='unavailable')
+                    coordinates=[matrix['points'][i] for i in nodes] if matrix.get('points') else [],nodes=nodes,provider='OSRM',traffic='unavailable')
     if best:
         best.pop('_seconds');best.pop('_total_meters')
     return best

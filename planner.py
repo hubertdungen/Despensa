@@ -26,7 +26,8 @@ def purchase_cost(offer, quantity, unit=None):
     return packs,cost
 
 
-def ineligible_reason(offer, prefs, day, now=None):
+def ineligible_reason(offer, prefs, day, now=None, projection=False):
+    """projection=True lets a future day reuse today's regular price; callers must flag it."""
     now=now or datetime.now(timezone.utc)
     if offer.get('country') not in prefs.get('countries',['PT']):
         return 'country_disabled'
@@ -53,7 +54,7 @@ def ineligible_reason(offer, prefs, day, now=None):
         return 'not_started'
     if offer.get('valid_to') and day>offer['valid_to']:
         return 'expired'
-    if day>now.date().isoformat() and not offer.get('valid_to'):
+    if day>now.date().isoformat() and not offer.get('valid_to') and not projection:
         return 'future_unconfirmed'
     condition=offer.get('condition','unknown')
     store=STORE_MAP.get(offer['store'],{})
@@ -75,8 +76,13 @@ def ineligible_reason(offer, prefs, day, now=None):
     return None
 
 
-def eligible(offer,prefs,day,now=None):
-    return ineligible_reason(offer,prefs,day,now) is None
+def eligible(offer,prefs,day,now=None,projection=False):
+    return ineligible_reason(offer,prefs,day,now,projection) is None
+
+
+def matching(items, offers):
+    """Item→offer matches are day-independent: compute once, filter eligibility per day."""
+    return {i['id']:[o for o in offers if match(i,o)] for i in items if not i['checked']}
 
 
 def match(item, offer):
@@ -112,18 +118,21 @@ def match(item, offer):
     return bool(tokens) and bool(rank(product_query(item['query']),offer['name'],offer.get('brand',''),offer.get('pack','')))
 
 
-def make_plan(items, offers, prefs, day, now=None, road=None):
+def make_plan(items, offers, prefs, day, now=None, road=None, matches=None, projection=False):
     pending = [i for i in items if not i['checked']]
+    matches = matches if matches is not None else matching(pending, offers)
+    today = (now or datetime.now(timezone.utc)).date().isoformat()
     choices = {}
     for item in pending:
         candidates = []
-        for o in offers:
-            if eligible(o, prefs, day, now) and match(item, o):
+        for o in matches.get(item['id'], []):
+            if eligible(o, prefs, day, now, projection):
                 packs,cost = purchase_cost(o,item['quantity'],item['unit'])
                 candidates.append(dict(item_id=item['id'], item_name=item['name'], offer=o,
                     packs=packs, cost_cents=cost, estimated=bool(o.get('variable_weight')),
                     quantity_basis='packages' if item['unit']=='un' and o['unit'] in ('kg','l') else 'content',
-                    balance_cents=round(packs * o.get('balance_cents', 0))))
+                    balance_cents=round(packs * o.get('balance_cents', 0)),
+                    projected=day>today and not o.get('valid_to')))
         choices[item['id']] = sorted(candidates, key=lambda c: c['cost_cents'])
     missing = [i['name'] for i in pending if not choices[i['id']]]
     store_ids = sorted({c['offer']['store'] for options in choices.values() for c in options})
@@ -147,7 +156,8 @@ def make_plan(items, offers, prefs, day, now=None, road=None):
                 missing=[i['name'] for i,c in zip(pending,selected) if not c],
                 complete=len(found) == len(pending), basket_cents=basket, travel_cents=travel,
                 total_cents=basket + travel if travel is not None else basket,
-                extra_km=km, route=route, distance_method='road' if route else 'unavailable', balance_cents=sum(c['balance_cents'] for c in found)))
+                extra_km=km, route=route, distance_method='road' if route else 'unavailable', balance_cents=sum(c['balance_cents'] for c in found),
+                projected=any(c['projected'] for c in found)))
     for option in plans:
         key=[option['stores'],[(s['item_id'],s['offer']['id'],s['packs']) for s in option['selections']],(option.get('route') or {}).get('coordinates')]
         option['id']=hashlib.sha256(json.dumps(key,sort_keys=True).encode()).hexdigest()[:24]
