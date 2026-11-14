@@ -118,7 +118,13 @@ def slots(day, profile, now, zone):
         later += timedelta(minutes=-later.minute % 30)
         if later <= local(end) - timedelta(minutes=45):
             found.append(('evening_home', 'home', dict(depart=later)))
-    elif not work:
+    elif work:
+        # Workday without declared hours: suggest evenings from home only.
+        t = max(local('19:00'), local(start))
+        while t <= local(end) - timedelta(minutes=60):
+            found.append(('evening_home', 'home', dict(depart=t)))
+            t += timedelta(hours=1)
+    else:
         t = local(start)
         while t <= local(end) - timedelta(minutes=60):
             found.append(('day_off', 'home', dict(depart=t)))
@@ -236,6 +242,8 @@ def _selfcheck():
     kinds = [k for k, _, _ in slots('2026-11-02', profile, datetime(2026, 11, 2, 6, tzinfo=zone), zone)]
     assert kinds == ['before_work', 'after_work', 'evening_home'], kinds
     assert all(k == 'day_off' for k, _, _ in slots('2026-11-07', profile, datetime(2026, 11, 2, 6, tzinfo=zone), zone))
+    unknown = dict(profile, work_start='', work_end='')
+    assert [d['depart'].hour for _, _, d in slots('2026-11-02', unknown, datetime(2026, 11, 2, 6, tzinfo=zone), zone)] == [19, 20]
     work_home = dict(points=[[0, 0], [1, 1], [2, 2]], durations=[[0, 1200, 1300], [1200, 0, 120], [1300, 120, 0]],
         places={2: dict(store='lidl-pt', name='Lidl', opening_hours='Mo-Sa 08:00-21:00')})
     home = dict(work_home, points=[[1, 1], [1, 1], [2, 2]], durations=[[0, 0, 120], [0, 0, 120], [120, 120, 0]])

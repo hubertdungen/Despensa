@@ -3,7 +3,7 @@ const autoCopy = {
   'pt-PT': {
     workHours:'Horário de trabalho',workStart:'Entrada',workEnd:'Saída',shopFrom:'Nos dias livres, a partir das',shopUntil:'até às',
     workHoursHint:'Com o horário, a Despensa compara ir antes de entrar, à saída ou mais tarde a partir de casa, com o trânsito típico de cada hora e o horário das lojas.',
-    autopilot:'Recomendar automaticamente o melhor dia e hora',
+    autopilot:'Recomendar automaticamente o melhor dia e hora',carryOver:'No início de cada mês, passar para a nova lista o que ficou por comprar',
     whenTitle:'Quando compensa ir?',whenSubtitle:'Compara os próximos 7 dias: lojas, hora de saída, trânsito típico e horários de abertura.',
     findWhen:'Encontrar o melhor momento',findingWhen:'A comparar dias e horas…',
     kind_before_work:'Antes de entrar no trabalho',kind_after_work:'À saída do trabalho',kind_evening_home:'Mais tarde, a partir de casa',kind_day_off:'Dia livre, a partir de casa',
@@ -26,7 +26,7 @@ const autoCopy = {
   'es-ES': {
     workHours:'Horario de trabajo',workStart:'Entrada',workEnd:'Salida',shopFrom:'Los días libres, desde las',shopUntil:'hasta las',
     workHoursHint:'Con el horario, Despensa compara ir antes de entrar, a la salida o más tarde desde casa, con el tráfico típico de cada hora y el horario de las tiendas.',
-    autopilot:'Recomendar automáticamente el mejor día y hora',
+    autopilot:'Recomendar automáticamente el mejor día y hora',carryOver:'Al empezar cada mes, pasar a la nueva lista lo que quedó sin comprar',
     whenTitle:'¿Cuándo compensa ir?',whenSubtitle:'Compara los próximos 7 días: tiendas, hora de salida, tráfico típico y horarios de apertura.',
     findWhen:'Buscar el mejor momento',findingWhen:'Comparando días y horas…',
     kind_before_work:'Antes de entrar a trabajar',kind_after_work:'A la salida del trabajo',kind_evening_home:'Más tarde, desde casa',kind_day_off:'Día libre, desde casa',
@@ -55,11 +55,12 @@ const trafficWord = f => f >= 1.45 ? at('trafficHeavy') : f >= 1.2 ? at('traffic
 function routineSchedule() {
   const p = state.profile, time = (name, label, value) => `<div class="field"><label for="f-${name}">${at(label)}</label><input id="f-${name}" name="${name}" type="time" value="${esc(value || '')}"></div>`;
   return `<div class="field"><label>${at('workHours')}</label><div class="form-grid">${time('work_start', 'workStart', p.work_start)}${time('work_end', 'workEnd', p.work_end)}${time('shop_from', 'shopFrom', p.shop_from || '09:00')}${time('shop_until', 'shopUntil', p.shop_until || '21:00')}</div><small class="muted">${at('workHoursHint')}</small></div>
-  <label class="checkbox-field"><input type="checkbox" name="autopilot" ${p.autopilot !== false ? 'checked' : ''}>${at('autopilot')}</label>`;
+  <label class="checkbox-field"><input type="checkbox" name="autopilot" ${p.autopilot !== false ? 'checked' : ''}>${at('autopilot')}</label>
+  <label class="checkbox-field"><input type="checkbox" name="carry_over" ${p.carry_over !== false ? 'checked' : ''}>${at('carryOver')}</label>`;
 }
 function scheduleFormData(f) {
   return {work_start: f.elements.work_start.value, work_end: f.elements.work_end.value, shop_from: f.elements.shop_from.value,
-    shop_until: f.elements.shop_until.value, autopilot: f.elements.autopilot.checked};
+    shop_until: f.elements.shop_until.value, autopilot: f.elements.autopilot.checked, carry_over: f.elements.carry_over.checked};
 }
 function plateField() {
   return `<div class="field" data-car-field><label for="vehicle-plate">${at('plate')}</label><div class="toolbar"><input id="vehicle-plate" autocomplete="off" placeholder="AA-00-AA" maxlength="12"><button type="button" class="small" id="plate-lookup">${at('plateButton')}</button></div><small class="muted" id="plate-result" aria-live="polite">${at('plateHint')}</small></div>`;

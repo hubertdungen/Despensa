@@ -26,7 +26,7 @@ from planner import make_plan
 
 from travel import defaults as travel_defaults
 
-APP_VERSION = '0.7.0'
+APP_VERSION = '0.8.0'
 ROOT = Path(__file__).resolve().parent
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, password TEXT NOT NULL, created TEXT NOT NULL);
@@ -53,7 +53,7 @@ def utcnow():
 def default_profile():
     return dict(locale='pt-PT', countries=['PT'], budget=250, budget_source='auto', reference_store='', interval_hours=24, automatic=True,
         mobility=travel_defaults(),max_stops=4, cost_per_km=.20, home='', work='', home_coords=None, work_coords=None,
-        workdays=[0, 1, 2, 3, 4], work_start='', work_end='', shop_from='09:00', shop_until='21:00', autopilot=True, stores={s: dict(enabled=not STORE_MAP[s]['professional'], card=False,
+        workdays=[0, 1, 2, 3, 4], work_start='', work_end='', shop_from='09:00', shop_until='21:00', autopilot=True, carry_over=True, stores={s: dict(enabled=not STORE_MAP[s]['professional'], card=False,
         subscription=False, delivery_subscription=False, access=False, coupons=[], extra_km=None, address='', coords=None) for s in STORE_MAP})
 
 
@@ -91,6 +91,11 @@ def create_app(data_dir=None, testing=False):
         db.execute("UPDATE research_tasks SET status='queued' WHERE status='running'")
         # A process restart must not strand an interrupted refresh indefinitely.
         db.execute("UPDATE jobs SET status='interrupted',finished=? WHERE status='running'", (utcnow(),))
+        if not db.execute("SELECT 1 FROM meta WHERE key='history_compacted'").fetchone():
+            # One-off: earlier versions stored every observation, even at an unchanged price.
+            db.execute('''DELETE FROM history WHERE rowid IN (SELECT rowid FROM (SELECT rowid,price,
+                LAG(price) OVER (PARTITION BY offer_id ORDER BY observed) AS previous FROM history) WHERE price=previous)''')
+            db.execute("INSERT INTO meta VALUES('history_compacted',?)", (json.dumps(utcnow()),))
 
     @contextmanager
     def database():
@@ -302,6 +307,7 @@ def create_app(data_dir=None, testing=False):
         if not p['shop_from'] or not p['shop_until'] or p['shop_from'] >= p['shop_until']:
             raise ValueError('Indique o intervalo em que pode ir às compras')
         p['autopilot'] = bool(d.get('autopilot', p.get('autopilot', True)))
+        p['carry_over'] = bool(d.get('carry_over', p.get('carry_over', True)))
         p['automatic'] = bool(d.get('automatic', p['automatic']))
         p['budget_source'] = 'manual' if d.get('budget_source', p.get('budget_source')) == 'manual' else 'auto'
         ref=str(d.get('reference_store', p.get('reference_store','')))
@@ -372,7 +378,10 @@ def create_app(data_dir=None, testing=False):
     @app.get('/api/items')
     @require_user
     def items():
-        return jsonify(items=get_items(g.user['id'], month_arg()))
+        month = month_arg()
+        if month == date.today().strftime('%Y-%m') and profile(g.user['id']).get('carry_over', True):
+            carry_over(app, g.user['id'], month)
+        return jsonify(items=get_items(g.user['id'], month))
 
     def clean_item(d):
         name = str(d.get('name', '')).strip()[:160]
@@ -386,7 +395,8 @@ def create_app(data_dir=None, testing=False):
             date.fromisoformat(needed)
         return dict(name=name, query=query, quantity=quantity, unit=unit, checked=bool(d.get('checked', False)),
             category=str(d.get('category', 'Mercearia'))[:60], needed_on=needed, offer_id=str(d.get('offer_id', ''))[:120],
-            family=str(d.get('family', ''))[:200], note=str(d.get('note', ''))[:300])
+            family=str(d.get('family', ''))[:200], note=str(d.get('note', ''))[:300],
+            carried_from=str(d.get('carried_from', ''))[:7])
 
     @app.post('/api/items')
     @require_user
@@ -955,6 +965,8 @@ def enqueue_refresh(app, internal=False):
         if not internal and last and (datetime.now(timezone.utc) - datetime.fromisoformat(last['created'])).total_seconds() < 900:
             raise ValueError('O catálogo foi atualizado há pouco. Aguarde 15 minutos entre recolhas.')
         jid = uuid.uuid4().hex
+        db.execute("DELETE FROM jobs WHERE status NOT IN ('queued','running') AND created<?",
+            ((datetime.now(timezone.utc) - timedelta(days=14)).isoformat(),))
         db.execute('INSERT INTO jobs VALUES(?,?,?,?,?)', (jid, 'queued', utcnow(), None, json.dumps({'sources': []})))
         return jid
 
@@ -975,6 +987,30 @@ def run_job(app, job):
         db.execute('UPDATE jobs SET status=?,finished=? WHERE id=?', ('done' if ok == len(reports) else 'partial' if ok else 'failed', utcnow(), job['id']))
         db.execute('INSERT OR REPLACE INTO meta VALUES(?,?)', ('last_refresh', json.dumps(utcnow())))
 
+def carry_over(app, uid, month):
+    """Once per month: an empty new month inherits what was left unbought in the previous one."""
+    first = date.fromisoformat(month + '-01')
+    previous = (first - timedelta(days=1)).strftime('%Y-%m')
+    key = f'carried:{uid}:{month}'
+    with app.database() as db:
+        if db.execute('SELECT 1 FROM meta WHERE key=?', (key,)).fetchone():
+            return 0
+        db.execute('INSERT INTO meta VALUES(?,?)', (key, json.dumps(utcnow())))
+        if db.execute('SELECT 1 FROM items WHERE user_id=? AND month=? LIMIT 1', (uid, month)).fetchone():
+            return 0
+        from research import request_query
+        count = 0
+        for row in db.execute('SELECT data FROM items WHERE user_id=? AND month=? ORDER BY rowid', (uid, previous)).fetchall():
+            item = json.loads(row['data'])
+            if item.get('checked'):
+                continue
+            item.update(checked=False, needed_on='', carried_from=previous)
+            db.execute('INSERT INTO items VALUES(?,?,?,?)', (uuid.uuid4().hex, uid, month, json.dumps(item)))
+            request_query(db, item['query'], owner=uid)
+            count += 1
+        return count
+
+
 def autopilot_all(app):
     """Recompute each user's best shopping window when it is stale, without being asked."""
     month, today = date.today().strftime('%Y-%m'), date.today().isoformat()
@@ -983,6 +1019,8 @@ def autopilot_all(app):
         busy = {r[0] for r in db.execute('SELECT DISTINCT user_id FROM items WHERE month=?', (month,))}
     for row in rows:
         p = json.loads(row['data'])
+        if p.get('carry_over', True) and carry_over(app, row['user_id'], month):
+            busy.add(row['user_id'])
         if row['user_id'] in busy and p.get('autopilot', True) and p.get('home_coords'):
             try:
                 app.planning.autopilot(row['user_id'], month, today)
@@ -1010,7 +1048,10 @@ def worker(app, stop=None):
                 last_time = datetime.fromisoformat(last['created']).timestamp() if last else 0
                 due_retry = any(s.get('status') == 'unavailable' and s.get('retry_at',0) <= time.time() for s in sources)
                 due_discovery = any(s.get('remaining',0) and s.get('retry_at',0) <= time.time() for s in sources)
-                if active and (due_retry or due_discovery or time.time() - last_time >= min(active) * 3600):
+                # Retries and catalogue discovery wait an hour between passes: each pass
+                # costs minutes of CPU on a small NAS. The user's own interval still applies.
+                idle = time.time() - last_time >= 3600
+                if active and ((idle and (due_retry or due_discovery)) or time.time() - last_time >= min(active) * 3600):
                     enqueue_refresh(app, internal=True)
         except Exception:
             logging.exception('Worker error')

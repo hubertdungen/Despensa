@@ -189,6 +189,13 @@ def read_redirect(url, limit):
         return bytes(content)
 
 
+def record_price(db, offer_id, observed, price):
+    """History keeps price changes only; the offer itself carries the latest observation time."""
+    last = db.execute('SELECT price FROM history WHERE offer_id=? ORDER BY observed DESC LIMIT 1', (offer_id,)).fetchone()
+    if not last or last[0] != price:
+        db.execute('INSERT OR REPLACE INTO history VALUES(?,?,?)', (offer_id, observed, price))
+
+
 class AccessBlocked(ValueError):
     """The source answers with a bot/captcha wall instead of its content."""
 
@@ -608,7 +615,7 @@ def run_research(app, report, queries=None, per_store=12, stores=None):
                         for o in offers:
                             o['observed_at']=observed
                             db.execute('INSERT OR REPLACE INTO offers VALUES(?,?,?,?)',(o['id'],'',store,json.dumps(o)))
-                            db.execute('INSERT OR REPLACE INTO history VALUES(?,?,?)',(o['id'],observed,o['price_cents']))
+                            record_price(db,o['id'],observed,o['price_cents'])
                         interval=86400 if entry['kind']=='sitemap' else 21600
                         db.execute('UPDATE research_urls SET checked=?,next_check=?,failures=0 WHERE store=? AND url=?',(time.time(),time.time()+interval,store,url))
                     state['count']+=len(offers)
@@ -743,7 +750,7 @@ def search_store(app, task, page_limit=6):
                     for o in offers:
                         o['observed_at']=observed
                         db.execute('INSERT OR REPLACE INTO offers VALUES(?,?,?,?)',(o['id'],'',store,json.dumps(o)))
-                        db.execute('INSERT OR REPLACE INTO history VALUES(?,?,?)',(o['id'],observed,o['price_cents']))
+                        record_price(db,o['id'],observed,o['price_cents'])
                     db.execute('UPDATE research_urls SET checked=?,next_check=?,failures=0 WHERE store=? AND url=?',(time.time(),time.time()+21600,store,url))
                 found+=len(offers)
             except Exception as error:

@@ -164,3 +164,38 @@ def test_captcha_robots_page_counts_as_access_block(monkeypatch):
     assert research.access_blocked(requests.HTTPError(response=response))
     response.status_code = 404
     assert not research.access_blocked(requests.HTTPError(response=response))
+
+
+def test_history_keeps_price_changes_only(tmp_path):
+    app = create_app(tmp_path, testing=True)
+    with app.database() as db:
+        for day, price in [('2026-11-01', 100), ('2026-11-02', 100), ('2026-11-03', 90), ('2026-11-04', 90)]:
+            research.record_price(db, 'o1', day, price)
+        assert [tuple(r) for r in db.execute("SELECT observed,price FROM history WHERE offer_id='o1' ORDER BY observed")] == [('2026-11-01', 100), ('2026-11-03', 90)]
+    app.planning.pool.shutdown()
+
+
+def test_old_duplicate_history_is_compacted_once(tmp_path):
+    app = create_app(tmp_path, testing=True)
+    with app.database() as db:
+        db.execute("DELETE FROM meta WHERE key='history_compacted'")
+        db.executemany('INSERT INTO history VALUES(?,?,?)', [('o', '1', 5), ('o', '2', 5), ('o', '3', 6), ('o', '4', 5), ('p', '1', 5)])
+    app.planning.pool.shutdown()
+    app = create_app(tmp_path, testing=True)
+    with app.database() as db:
+        assert [tuple(r) for r in db.execute('SELECT offer_id,observed FROM history ORDER BY offer_id,observed')] == [('o', '1'), ('o', '3'), ('o', '4'), ('p', '1')]
+    app.planning.pool.shutdown()
+
+
+def test_new_month_inherits_unbought_items_once(tmp_path):
+    app = create_app(tmp_path, testing=True); c = app.test_client(); register(c, 'rollover')
+    month = date.today().strftime('%Y-%m')
+    previous = (date.today().replace(day=1) - timedelta(days=1)).strftime('%Y-%m')
+    bought = c.post('/api/items', json=dict(name='Arroz', quantity=1, unit='kg', month=previous)).json['item']
+    c.post('/api/items', json=dict(name='Azeite', quantity=1, unit='l', month=previous))
+    c.patch('/api/items/' + bought['id'], json=dict(checked=True))
+    items = c.get('/api/items?month=' + month).json['items']
+    assert [(i['name'], i['checked'], i['carried_from']) for i in items] == [('Azeite', False, previous)]
+    assert c.delete('/api/items/' + items[0]['id'], json={}).status_code == 200
+    assert c.get('/api/items?month=' + month).json['items'] == []  # deleting is respected: no second copy
+    app.planning.pool.shutdown()
