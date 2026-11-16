@@ -149,4 +149,4 @@ Para backups consistentes, use a API de backup do SQLite ou pare a aplicação a
 **AGPL-3.0-or-later.** Gratuito para utilização pessoal e também utilizável comercialmente nos termos da licença. Distribuições e versões modificadas disponibilizadas pela rede devem respeitar as obrigações da AGPL. A licença do código não concede direitos sobre conteúdos, marcas ou bases de dados das lojas. Não existe afiliação aos supermercados mencionados.
 
 
-<p align="center"><a href="https://dlforge.dungenlabs.com"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/branding/dlforge-logo-negative.svg"><source media="(prefers-color-scheme: light)" srcset="docs/branding/dlforge-logo.svg"><img src="docs/branding/dlforge-logo.svg" alt="DL Forge" width="120"></picture></a><br><a href="https://dlforge.dungenlabs.com">DL Forge</a></p>
+<p align="center"><a href="https://dlforge.dungenlabs.com"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/branding/dlforge-logo-negative.svg"><source media="(prefers-color-scheme: light)" srcset="docs/branding/dlforge-logo.svg"><img src="docs/branding/dlforge-logo.svg" alt="DL Forge" width="120"></picture></a></p>
