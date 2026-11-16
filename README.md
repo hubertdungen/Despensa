@@ -1,7 +1,7 @@
 <p align="center"><img src="static/logo.svg" width="88" alt="Despensa"></p>
 <h1 align="center">Despensa</h1>
 <p align="center"><strong>Compras com sentido. Compras con sentido.</strong><br>A sua lista, os preços à vista e um plano para comprar melhor em Portugal e Espanha.</p>
-<p align="center"><a href="#começar">Instalar</a> · <a href="docs/README.es.md">Español</a> · <a href="docs/SOURCES.md">Fontes e metodologia</a> · <a href="CONTRIBUTING.md">Contribuir</a></p>
+<p align="center"><a href="#começar">Instalar</a> · <a href="docs/README.en.md">English</a> · <a href="docs/README.es.md">Español</a> · <a href="docs/SOURCES.md">Fontes e metodologia</a> · <a href="CONTRIBUTING.md">Contribuir</a></p>
 
 ![Interface de computador](docs/screenshots/desktop.png)
 

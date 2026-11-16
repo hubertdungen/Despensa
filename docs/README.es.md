@@ -1,6 +1,6 @@
 # Despensa · compras con sentido
 
-[Português](../README.md) · [Fuentes y metodología](SOURCES.md) · [Authelia y Rumo](../integrations/README.md)
+[Português](../README.md) · [English](README.en.md) · [Fuentes y metodología](SOURCES.md) · [Authelia y Rumo](../integrations/README.md)
 
 Despensa organiza la compra mensual y **busca precios automáticamente** en supermercados de Portugal y España. Se aloja en un ordenador o NAS, tiene interfaz en portugués europeo y español, diseño para móvil/escritorio, logo propio e instalación como PWA.
 
