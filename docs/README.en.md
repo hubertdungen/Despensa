@@ -68,4 +68,4 @@ Browser tests: `npm ci`, `npx playwright install chromium`, `npm run test:e2e`. 
 
 **AGPL-3.0-or-later.** Free for personal use and usable commercially under the license terms; modified versions offered over a network must honour the AGPL. The code license grants no rights over the stores' content, trademarks or databases, and there is no affiliation with the supermarkets mentioned.
 
-<p align="center"><a href="https://dlforge.dungenlabs.com"><picture><source media="(prefers-color-scheme: dark)" srcset="branding/dlforge-logo-negative.svg"><source media="(prefers-color-scheme: light)" srcset="branding/dlforge-logo.svg"><img src="branding/dlforge-logo.svg" alt="DL Forge" width="120"></picture></a></p>
+<p align="center"><a href="https://dlforge.dungenlabs.com"><img src="branding/dlforge-logo.svg#gh-light-mode-only" alt="DL Forge" width="120"><img src="branding/dlforge-logo-negative.svg#gh-dark-mode-only" alt="DL Forge" width="120"></a></p>
