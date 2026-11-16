@@ -26,7 +26,7 @@ from planner import make_plan
 
 from travel import defaults as travel_defaults
 
-APP_VERSION = '0.8.0'
+APP_VERSION = '0.8.1'
 ROOT = Path(__file__).resolve().parent
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, password TEXT NOT NULL, created TEXT NOT NULL);
@@ -185,7 +185,7 @@ def create_app(data_dir=None, testing=False):
         if isinstance(err, HTTPException):
             return jsonify(error=err.description), err.code
         if isinstance(err, (ValueError, TypeError, InvalidOperation)):
-            return jsonify(error=str(err)[:200]), 400
+            return jsonify(error=str(err)[:200] if own_message(err) else 'Dados inválidos'), 400
         app.logger.exception('Request failed')
         return jsonify(error='Não foi possível concluir. Tente novamente.'), 500
 
@@ -378,10 +378,7 @@ def create_app(data_dir=None, testing=False):
     @app.get('/api/items')
     @require_user
     def items():
-        month = month_arg()
-        if month == date.today().strftime('%Y-%m') and profile(g.user['id']).get('carry_over', True):
-            carry_over(app, g.user['id'], month)
-        return jsonify(items=get_items(g.user['id'], month))
+        return jsonify(items=get_items(g.user['id'], month_arg()))
 
     def clean_item(d):
         name = str(d.get('name', '')).strip()[:160]
@@ -402,7 +399,7 @@ def create_app(data_dir=None, testing=False):
     @require_user
     def add_item():
         d = request.get_json()
-        item = clean_item(d)
+        item = clean_item(dict(d, carried_from=''))
         iid = str(d.get('client_id') or uuid.uuid4().hex)
         if not re.fullmatch('[a-f0-9]{32}', iid):
             raise ValueError('Identificador inválido')
@@ -412,7 +409,10 @@ def create_app(data_dir=None, testing=False):
                 return jsonify(item=dict(json.loads(existing['data']), id=iid))
             if db.execute('SELECT COUNT(*) FROM items WHERE user_id=? AND month=?', (g.user['id'], month_arg(d.get('month')))).fetchone()[0] >= 300:
                 raise ValueError('Limite de 300 produtos por mês')
-            db.execute('INSERT INTO items VALUES(?,?,?,?)', (iid, g.user['id'], month_arg(d.get('month')), json.dumps(item)))
+            try:
+                db.execute('INSERT INTO items VALUES(?,?,?,?)', (iid, g.user['id'], month_arg(d.get('month')), json.dumps(item)))
+            except sqlite3.IntegrityError:
+                return jsonify(error='Identificador já em uso'), 409
             from research import request_query
             request_query(db, item['query'],owner=g.user['id'])
         return jsonify(item=dict(item, id=iid)), 201
@@ -427,7 +427,8 @@ def create_app(data_dir=None, testing=False):
             if request.method == 'DELETE':
                 db.execute('DELETE FROM items WHERE id=? AND user_id=?', (iid, g.user['id']))
                 return jsonify(ok=True)
-            item = clean_item(dict(json.loads(row['data']), **request.get_json()))
+            stored = json.loads(row['data'])
+            item = clean_item({**stored, **request.get_json(), 'carried_from': stored.get('carried_from', '')})
             db.execute('UPDATE items SET data=? WHERE id=? AND user_id=?', (json.dumps(item), iid, g.user['id']))
             if any(k in request.get_json() for k in ('name', 'query', 'family')):
                 from research import request_query
@@ -442,16 +443,18 @@ def create_app(data_dir=None, testing=False):
         if source == target:
             raise ValueError('Escolha dois meses diferentes')
         with database() as db:
-            existing = {fold(i['name']) for i in get_items(g.user['id'], target)}
-            count = 0
-            for item in get_items(g.user['id'], source):
-                if fold(item['name']) in existing:
-                    continue
+            current = get_items(g.user['id'], target)
+            existing = {fold(i['name']) for i in current}
+            new = [i for i in get_items(g.user['id'], source) if fold(i['name']) not in existing]
+            if len(current) + len(new) > 300:
+                raise ValueError('Limite de 300 produtos por mês')
+            from research import request_query
+            for item in new:
                 item.pop('id')
-                item.update(checked=False, needed_on='')
+                item.update(checked=False, needed_on='', carried_from='')
                 db.execute('INSERT INTO items VALUES(?,?,?,?)', (uuid.uuid4().hex, g.user['id'], target, json.dumps(item)))
-                count += 1
-        return jsonify(copied=count)
+                request_query(db, item['query'], owner=g.user['id'])
+        return jsonify(copied=len(new))
 
     def get_offer(uid, oid):
         with database() as db:
@@ -826,7 +829,12 @@ def create_app(data_dir=None, testing=False):
         trip=dict(id=tid,day=day,cost_cents=int((amount*100).quantize(Decimal('1'),rounding=ROUND_HALF_UP)),
             estimated=bool(d.get('estimated',False)),note=str(d.get('note',''))[:200])
         with database() as db:
-            db.execute('INSERT OR IGNORE INTO trips VALUES(?,?,?,?)',(tid,g.user['id'],day[:7],json.dumps(trip)))
+            row=db.execute('SELECT user_id,data FROM trips WHERE id=?',(tid,)).fetchone()
+            if row:
+                if row['user_id']!=g.user['id']:
+                    return jsonify(error='Identificador já em uso'),409
+                return jsonify(trip=json.loads(row['data']))
+            db.execute('INSERT INTO trips VALUES(?,?,?,?)',(tid,g.user['id'],day[:7],json.dumps(trip)))
         return jsonify(trip=trip),201
 
     @app.delete('/api/trips/<tid>')
@@ -987,23 +995,37 @@ def run_job(app, job):
         db.execute('UPDATE jobs SET status=?,finished=? WHERE id=?', ('done' if ok == len(reports) else 'partial' if ok else 'failed', utcnow(), job['id']))
         db.execute('INSERT OR REPLACE INTO meta VALUES(?,?)', ('last_refresh', json.dumps(utcnow())))
 
+def own_message(err):
+    """True when the error was raised on purpose by this app (a `raise` in our own code), so its
+    Portuguese text is safe to show. float('x'), date.fromisoformat and library errors are not."""
+    import dis
+    tb = err.__traceback__
+    if not tb:
+        return False
+    while tb.tb_next:
+        tb = tb.tb_next
+    code = tb.tb_frame.f_code
+    return Path(code.co_filename).resolve().parent == ROOT and dis.opname[code.co_code[tb.tb_lasti]] == 'RAISE_VARARGS'
+
+
 def carry_over(app, uid, month):
-    """Once per month: an empty new month inherits what was left unbought in the previous one."""
+    """Once per month: the new month inherits what was left unbought in the previous one.
+    Items the user already added to the new month stay; same-name ones are not duplicated."""
     first = date.fromisoformat(month + '-01')
     previous = (first - timedelta(days=1)).strftime('%Y-%m')
     key = f'carried:{uid}:{month}'
     with app.database() as db:
-        if db.execute('SELECT 1 FROM meta WHERE key=?', (key,)).fetchone():
+        if db.execute('INSERT OR IGNORE INTO meta VALUES(?,?)', (key, json.dumps(utcnow()))).rowcount == 0:
             return 0
-        db.execute('INSERT INTO meta VALUES(?,?)', (key, json.dumps(utcnow())))
-        if db.execute('SELECT 1 FROM items WHERE user_id=? AND month=? LIMIT 1', (uid, month)).fetchone():
-            return 0
+        existing = {fold(json.loads(r['data'])['name']) for r in db.execute('SELECT data FROM items WHERE user_id=? AND month=?', (uid, month))}
+        room = 300 - len(existing)
         from research import request_query
         count = 0
         for row in db.execute('SELECT data FROM items WHERE user_id=? AND month=? ORDER BY rowid', (uid, previous)).fetchall():
             item = json.loads(row['data'])
-            if item.get('checked'):
+            if item.get('checked') or fold(item['name']) in existing or count >= room:
                 continue
+            existing.add(fold(item['name']))
             item.update(checked=False, needed_on='', carried_from=previous)
             db.execute('INSERT INTO items VALUES(?,?,?,?)', (uuid.uuid4().hex, uid, month, json.dumps(item)))
             request_query(db, item['query'], owner=uid)

@@ -7,7 +7,6 @@ import requests
 
 _cache = {}
 _lock = threading.Lock()
-HOSTS = {'www.continente.pt','www.auchan.pt'}
 IMAGE_PATHS = {
     'www.continente.pt': ('/dw/image/',),
     'www.auchan.pt': ('/dw/image/', '/on/demandware.static/-/Sites-auchan-pt-master-catalog/'),
@@ -32,7 +31,7 @@ def thumbnail(offer):
         if parsed.scheme!='https' or parsed.hostname not in IMAGE_PATHS or parsed.port not in (None,443) or parsed.username or not parsed.path.startswith(IMAGE_PATHS.get(parsed.hostname, ())):
             return None
         with requests.get(url,timeout=(4,8),allow_redirects=False,stream=True,
-                headers={'User-Agent':'Despensa/0.4 (+https://github.com/hubertdungen/Despensa)'}) as response:
+                headers={'User-Agent':'Despensa (+https://github.com/hubertdungen/Despensa)'}) as response:
             if response.status_code in (301,302,303,307,308):
                 from urllib.parse import urljoin
                 url=urljoin(url,response.headers.get('Location',''))

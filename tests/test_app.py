@@ -226,3 +226,36 @@ def test_unknown_travel_cost_cannot_undercut_same_coverage_with_a_known_route():
         default_profile(),'2026-10-25',NOW,road=matrix)['plans']
     assert plans[0]['stores']==['continente'] and plans[0]['travel_cents'] is not None
     assert plans[1]['stores']==['pingo-doce'] and plans[1]['travel_cents'] is None
+
+
+def test_copy_month_respects_the_monthly_limit_and_queues_price_research(app):
+    c=app.test_client();uid=register(c)['user']['id']
+    with app.database() as db:
+        for n in range(299):
+            db.execute('INSERT INTO items VALUES(?,?,?,?)',(f'{n:032x}',uid,'2026-10','{"name":"Produto %d","query":"produto"}'%n))
+        for name in ('Grão','Feijão'):
+            db.execute('INSERT INTO items VALUES(?,?,?,?)',(name.encode().hex().ljust(32,'0'),uid,'2026-09','{"name":"%s","query":"%s","carried_from":"2026-08"}'%(name,name.lower())))
+    r=c.post('/api/items/copy',json={'source':'2026-09','target':'2026-10'})
+    assert r.status_code==400 and 'Limite' in r.json['error']
+    assert len(c.get('/api/items?month=2026-10').json['items'])==299
+    assert c.post('/api/items/copy',json={'source':'2026-09','target':'2026-11'}).json['copied']==2
+    assert {i['carried_from'] for i in c.get('/api/items?month=2026-11').json['items']}=={''}
+    with app.database() as db:
+        assert {r[0] for r in db.execute('SELECT query FROM research_queries')}>={'grao','feijao'}
+
+
+def test_only_the_apps_own_messages_reach_the_user_and_ids_cannot_be_taken(app):
+    a,b=app.test_client(),app.test_client();register(a,'alice');register(b,'bob')
+    assert a.post('/api/items',json=dict(name='Leite',quantity='muito',unit='l')).json=={'error':'Dados inválidos'}
+    assert a.post('/api/items',json=dict(name='Leite',quantity=1,unit='l',needed_on='amanhã')).json=={'error':'Dados inválidos'}
+    assert a.post('/api/items',json=dict(name='Leite',quantity=1,unit='l',month='13-2026')).json=={'error':'Mês inválido'}
+    assert a.post('/api/items',json=dict(name='',quantity=1,unit='l')).json['error'].startswith('Indique um produto')
+    one=a.post('/api/items',json=dict(name='Leite',quantity=1,unit='l',client_id='c'*32,carried_from='1999-01'))
+    assert one.status_code==201 and one.json['item']['carried_from']==''
+    assert a.patch('/api/items/'+'c'*32,json={'carried_from':'1999-01'}).json['item']['carried_from']==''
+    assert b.post('/api/items',json=dict(name='Pão',quantity=1,unit='un',client_id='c'*32)).status_code==409
+    trip=dict(id='d'*32,cost='3,50')
+    assert a.post('/api/trips',json=trip).status_code==201
+    again=a.post('/api/trips',json=dict(trip,cost='9'))
+    assert again.status_code==200 and again.json['trip']['cost_cents']==350
+    assert b.post('/api/trips',json=trip).status_code==409
