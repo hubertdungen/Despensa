@@ -2028,12 +2028,3 @@ dialog::backdrop {
 }
 @keyframes fgd{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
 @media (prefers-reduced-motion:reduce){.forge-link:hover .fgm *{animation:none}}
-
-/* DL Forge: contorno suave; ao passar o rato desenha-se de novo e enche de coral */
-.dlf{width:76px;height:36px;flex:none;overflow:visible;color:inherit}
-.dlf>*{fill:rgba(232,126,106,0);stroke:currentColor;stroke-width:11;stroke-linejoin:round;stroke-linecap:round;opacity:.6;transition:stroke .4s,fill .5s,opacity .4s}
-.dlf>*:nth-child(2){transition-delay:.06s}.dlf>*:nth-child(3){transition-delay:.12s}.dlf>*:nth-child(4){transition-delay:.18s}.dlf>*:nth-child(5){transition-delay:.24s}.dlf>*:nth-child(6){transition-delay:.3s}.dlf>*:nth-child(7){transition-delay:.36s}.dlf>*:nth-child(8){transition-delay:.42s}.dlf>*:nth-child(9){transition-delay:.48s}
-@keyframes dlfdraw{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
-a:hover .dlf>*,a:focus-visible .dlf>*{stroke:#e87e6a;fill:rgba(232,126,106,.2);opacity:1;stroke-dasharray:1;animation:dlfdraw .9s ease-out both}
-a:hover .dlf,a:focus-visible .dlf{filter:drop-shadow(0 0 6px rgba(232,126,106,.45))}
-@media (prefers-reduced-motion:reduce){a:hover .dlf>*,a:focus-visible .dlf>*{animation:none;stroke-dasharray:none}}
