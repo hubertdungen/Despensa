@@ -1,5 +1,5 @@
 "use strict";
-const APP_VERSION = "0.8.0";
+const APP_VERSION = "0.8.1";
 const $ = (s) => document.querySelector(s);
 const esc = (x) =>
   String(x ?? "").replace(

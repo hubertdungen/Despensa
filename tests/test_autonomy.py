@@ -188,14 +188,21 @@ def test_old_duplicate_history_is_compacted_once(tmp_path):
 
 
 def test_new_month_inherits_unbought_items_once(tmp_path):
-    app = create_app(tmp_path, testing=True); c = app.test_client(); register(c, 'rollover')
+    from app import carry_over
+    app = create_app(tmp_path, testing=True); c = app.test_client(); register(c, 'rollover'); uid = c.get('/api/me').json['user']['id']
     month = date.today().strftime('%Y-%m')
     previous = (date.today().replace(day=1) - timedelta(days=1)).strftime('%Y-%m')
     bought = c.post('/api/items', json=dict(name='Arroz', quantity=1, unit='kg', month=previous)).json['item']
     c.post('/api/items', json=dict(name='Azeite', quantity=1, unit='l', month=previous))
+    c.post('/api/items', json=dict(name='Leite', quantity=6, unit='l', month=previous))
     c.patch('/api/items/' + bought['id'], json=dict(checked=True))
+    # The user was quicker than the background pass: the month is no longer empty.
+    c.post('/api/items', json=dict(name='leite', quantity=2, unit='l', month=month))
+    assert len(c.get('/api/items?month=' + month).json['items']) == 1  # reading never writes
+    assert carry_over(app, uid, month) == 1
     items = c.get('/api/items?month=' + month).json['items']
-    assert [(i['name'], i['checked'], i['carried_from']) for i in items] == [('Azeite', False, previous)]
-    assert c.delete('/api/items/' + items[0]['id'], json={}).status_code == 200
-    assert c.get('/api/items?month=' + month).json['items'] == []  # deleting is respected: no second copy
+    assert [(i['name'], i['quantity'], i['carried_from']) for i in items] == [('leite', 2, ''), ('Azeite', 1, previous)]
+    assert c.delete('/api/items/' + items[1]['id'], json={}).status_code == 200
+    assert carry_over(app, uid, month) == 0  # deleting is respected: no second copy
+    assert len(c.get('/api/items?month=' + month).json['items']) == 1
     app.planning.pool.shutdown()
