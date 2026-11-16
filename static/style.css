@@ -2011,3 +2011,7 @@ dialog::backdrop {
 @media(max-width:600px) {
   .journey-card>header { padding:18px 16px 0; }
 }
+
+/* Division attribution uses external CSS to respect the app Content Security Policy. */
+.forge-brand{display:inline-flex;align-items:center;justify-content:center;gap:8px;color:inherit;text-decoration:none;font-size:12px}.forge-brand svg{width:76px;height:36px;flex:none}
+.forge-footer{text-align:center;padding:12px 12px 96px;color:#214e3b}
